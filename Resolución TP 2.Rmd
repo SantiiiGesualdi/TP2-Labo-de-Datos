@@ -1,9 +1,53 @@
 ---
-title: "Resolución TP2"
-author: "Palmer, Candela. Gesualdi, Santiago."
-date: "2026-06-18"
-output: html_document
+title: "**Trabajo Práctico 2**"
+subtitle: |
+  Laboratorio de Datos - Instituto de Cálculo  
+  Facultad de Ciencias Exactas y Naturales - Universidad de Buenos Aires
+author: |
+  Grupo Nº 3:  
+  Gesualdi Santiago y Palmer Candela Magalí
+date: "`r Sys.Date()`"
+
+output:
+  bookdown::pdf_document2:
+    latex_engine: xelatex
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    citation_package: biblatex
+    extra_dependencies: ["subfig"]
+    
+classoption: titlepage
+bibliography: referencias.bib
+biblio-style: apa
+link-citations: true
+lang: es
+geometry: "margin=2.5cm"
+mainfont: "Times New Roman"
+fontsize: 11pt
+linestretch: 1.5
+
+header-includes:
+  - \usepackage{float}
+  
+  - \usepackage{titlesec}
+  - \titleformat{\section}{\fontsize{16}{18}\bfseries}{\thesection}{1em}{}
+  - \titleformat{\subsection}{\fontsize{14}{16}\bfseries}{\thesubsection}{1em}{}
+  
+  - \renewcommand{\contentsname}{Contenidos}
+  
+  - \definecolor{gris}{RGB}{89, 88, 88}
+
+  - \usepackage{titling}
+  - \pretitle{\begin{center}\vspace{\fill}\fontsize{16}{18}\selectfont}
+  - \posttitle{\par\end{center}}
+  - \preauthor{\begin{center}\fontsize{11}{13}\selectfont}
+  - \postauthor{\par\end{center}}
+  - \predate{\begin{center}\fontsize{11}{13}\selectfont}
+  - \postdate{\end{center}\vspace{\fill}}
+
 ---
+\newpage
 
 
 ```{r setup, warning = FALSE, message = FALSE, echo = FALSE}
@@ -23,3 +67,13 @@ library(kableExtra)
 library(paletteer)
 
 ```
+
+<!-- comentarios/tips a tener en cuenta: -->
+<!-- - Para la descripcion de base de datos en metodologia podemos hacer una tabla descriptiva de las variables (por ej vars continuas: media y rango, vars categoricas: porcentajes). Normalmente es la "tabla 1" de TODOS los informes de analisis de datos, hasta hay paquetes/librerias con funciones que las hacen, una es "arsenal". En esa misma tabla debe estar la informacion sobre datos faltantes. -->
+<!-- - Para regresion lineal simple es una buena practica hacer una tabla con los estimadores (R2, etc). A veces no es necesario mostrarla pero sí es algo bueno hacerla para tener una idea de como va el modelo. -->
+<!--  - Graficos con facetas tambien es buena idea si mostras varios tipos de regresion o por ej en polinomial y mostras varios grados de un mismo polinomio.  -->
+<!--  - No es necesario mostrar TODOS los graficos y tablas creados, pero sí es necesario incluirlo en el codigo. -->
+<!--  - MUCHO CUIDADO con sobre ajustar (hizo mucho enfasis en esto, como que era una trampa en uno de los ejercicios) -->
+<!--  - Todas las desiciones tomadas deben estar fundamentadas -->
+<!--  - Buena practica incluir alcances y ventajas (si las hay) en el parrafo de limitaciones -->
+<!--  - Evaluar muy a detalle qué metrica conviene usar para evaluar la capacidad predivtiva de los modelos. Mas que nada en la parte que involucra la variable del precio (que son miles de dolares). (pista sobre esto: tiene que ver con arboles) -->
