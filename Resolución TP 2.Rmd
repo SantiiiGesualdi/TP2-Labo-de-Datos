@@ -47,6 +47,20 @@ header-includes:
   - \postdate{\end{center}\vspace{\fill}}
 
 ---
+
+
+
+<!-- comentarios/tips a tener en cuenta: -->
+<!-- - Para la descripcion de base de datos en metodologia podemos hacer una tabla descriptiva de las variables (por ej vars continuas: media y rango, vars categoricas: porcentajes). Normalmente es la "tabla 1" de TODOS los informes de analisis de datos, hasta hay paquetes/librerias con funciones que las hacen, una es "arsenal". En esa misma tabla debe estar la informacion sobre datos faltantes. -->
+<!-- - Para regresion lineal simple es una buena practica hacer una tabla con los estimadores (R2, etc). A veces no es necesario mostrarla pero sí es algo bueno hacerla para tener una idea de como va el modelo. -->
+<!--  - Graficos con facetas tambien es buena idea si mostras varios tipos de regresion o por ej en polinomial y mostras varios grados de un mismo polinomio.  -->
+<!--  - No es necesario mostrar TODOS los graficos y tablas creados, pero sí es necesario incluirlo en el codigo. -->
+<!--  - MUCHO CUIDADO con sobre ajustar (hizo mucho enfasis en esto, como que era una trampa en uno de los ejercicios) -->
+<!--  - Todas las desiciones tomadas deben estar fundamentadas -->
+<!--  - Buena practica incluir alcances y ventajas (si las hay) en el parrafo de limitaciones -->
+<!--  - Evaluar muy a detalle qué metrica conviene usar para evaluar la capacidad predivtiva de los modelos. Mas que nada en la parte que involucra la variable del precio (que son miles de dolares). (pista sobre esto: tiene que ver con arboles) -->
+
+
 \newpage
 
 
@@ -58,7 +72,9 @@ library(tidyverse)
 library(dplyr)
 library(glue)
 
+
 library(ggplot2)
+library(ggrepel)
 library(scales)
 library(ComplexUpset)
 library(knitr)
@@ -66,63 +82,388 @@ options(kableExtra.latex.load_packages = FALSE)
 library(kableExtra)
 library(paletteer)
 
+library(corrplot)
+library(caret)
+
+
+# Tema y paleta
+
+tema <- theme_minimal(base_size = 11)
+paleta <- "Set2"
 ```
 
-<<<<<<< HEAD
-```{r}
+
+```{r import_datos}
 datos <- read.csv("datosTP2_2026.csv", na.strings = c("NA", ""), stringsAsFactors = TRUE)
 ```
 
-```{r}
+```{r tablita_na}
 datos %>%
-  #Devuelve una fila con el porcentaje de NA de cada columna
-  summarise(across(everything(), ~ mean(is.na(.)))) %>% 
-  #Lo pasa a Variable | prop_na
+  summarise(across(everything(), ~ mean(is.na(.)))) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "prop_na") %>%
   ggplot(aes(x = reorder(variable, prop_na), y = prop_na)) +
-  
-  #Genero las columnas, les pongo un puntito al final y el respectivo porcentaje que refiere
-  geom_col(fill = "#8da0cb", width = 0.3,alpha=0.5) +
+  geom_col(fill = "#8da0cb", width = 0.3, alpha = 0.5) +
   geom_point(color = "#2c3e50", size = 2.5) +
-  geom_text(
-    aes(label = percent(prop_na, accuracy = 0.1)), 
-    hjust = -0.3, size = 3.5, color = "#2C3E50", fontface = "bold"
-  ) +
-  
-  #Las doy vuelta  y les acomodo el formato
+  geom_text(aes(label = percent(prop_na, accuracy = 0.1)),
+            hjust = -0.3, size = 3, color = "#2C3E50", fontface = "bold") +
   coord_flip() +
-  scale_y_continuous(
-    labels = percent_format(), 
-    expand = expansion(mult = c(0, 0.15))
-  ) +
-  labs(
-    y = "Porcentaje de Datos Faltantes (NA)"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 11, color = "#4A4A4A"),
-    axis.text.y = element_text(size = 11, face = "bold", color = "#2C3E50"),
-    plot.title = element_text(face = "bold", size = 14, color = "#1D3557", margin = margin(b = 8)),
-    plot.subtitle = element_text(size = 11, color = "#6C7A89", margin = margin(b = 20)),
-    axis.title.y = element_blank(),
-    plot.margin = margin(t = 20, r = 20, b = 20, l = 20) 
-  )
+  scale_y_continuous(labels = percent_format(), expand = expansion(mult = c(0, 0.18))) +
+  labs(y = "Porcentaje de datos faltantes (NA)", x = NULL) +
+  tema
 
+
+n_obs_tot <- nrow(datos)
+
+n_na_bath <- sum(is.na(datos$bathrooms))
+prop_na_bath <- n_na_bath / n_obs_tot
 datos_sin_na <- drop_na(data = datos)
 ```
 
 
-```{r}
-summary(datos)
+```{r funciones_tablas}
+# Resumen de variables numéricas
+resumen_num <- function(df, cols){
+  df %>%
+    summarise(across(all_of(cols), list(
+      media   = ~mean(.x, na.rm = TRUE),
+      mediana = ~median(.x, na.rm = TRUE),
+      sd      = ~sd(.x, na.rm = TRUE),
+      min     = ~min(.x, na.rm = TRUE),
+      max     = ~max(.x, na.rm = TRUE)),
+      .names = "{.col}__{.fn}")) %>%
+    pivot_longer(everything(),
+                 names_to = c("Variable", ".value"),
+                 names_sep = "__")
+}
+
+# Frecuencias de variables categórica
+tabla_categorica <- function(df, col){
+  df %>%
+    filter(!is.na(.data[[col]])) %>%
+    count(.data[[col]], name = "frec_abs") %>%
+    mutate(frec_rel = frec_abs / sum(frec_abs)) %>%
+    arrange(desc(frec_abs))
+}
 ```
 
-<!-- comentarios/tips a tener en cuenta: -->
-<!-- - Para la descripcion de base de datos en metodologia podemos hacer una tabla descriptiva de las variables (por ej vars continuas: media y rango, vars categoricas: porcentajes). Normalmente es la "tabla 1" de TODOS los informes de analisis de datos, hasta hay paquetes/librerias con funciones que las hacen, una es "arsenal". En esa misma tabla debe estar la informacion sobre datos faltantes. -->
-<!-- - Para regresion lineal simple es una buena practica hacer una tabla con los estimadores (R2, etc). A veces no es necesario mostrarla pero sí es algo bueno hacerla para tener una idea de como va el modelo. -->
-<!--  - Graficos con facetas tambien es buena idea si mostras varios tipos de regresion o por ej en polinomial y mostras varios grados de un mismo polinomio.  -->
-<!--  - No es necesario mostrar TODOS los graficos y tablas creados, pero sí es necesario incluirlo en el codigo. -->
-<!--  - MUCHO CUIDADO con sobre ajustar (hizo mucho enfasis en esto, como que era una trampa en uno de los ejercicios) -->
-<!--  - Todas las desiciones tomadas deben estar fundamentadas -->
-<!--  - Buena practica incluir alcances y ventajas (si las hay) en el parrafo de limitaciones -->
-<!--  - Evaluar muy a detalle qué metrica conviene usar para evaluar la capacidad predivtiva de los modelos. Mas que nada en la parte que involucra la variable del precio (que son miles de dolares). (pista sobre esto: tiene que ver con arboles) -->
+```{r imputiacion_de_na}
+# <!-- Santi: Me parece que las consignas dan la pista para hacer esto
+#             Encima son muy poquitos, vale la pena -->
+
+df_limpio <- datos %>%
+  group_by(property_type, rooms) %>% # Razonable usar que las habitaciones y el tipo dan los baños
+  mutate(bathrooms = ifelse(is.na(bathrooms),
+                            median(bathrooms, na.rm = TRUE), bathrooms)) %>%
+  ungroup()
+
+df_limpio$bathrooms[is.na(datos$bathrooms)] <- median(df_limpio$bathrooms, na.rm = TRUE)
+
+
+n_error_sup <- sum(datos$surface_covered > datos$surface_total) # No puede haber más superficie                                                                   # cubierta que superficie total
+
+n_error_rooms <- sum(datos$bedrooms > datos$rooms) # No pueden haber más habs. que ambs.
+df <- df_limpio %>% filter(surface_covered <= surface_total,
+                             bedrooms <= rooms)
+
+
+# <!-- Santi: Agrego Columna de precio x m2 -->
+df <- df %>% 
+  mutate(price_m2  = price/surface_covered)
+
+
+
+
+n_obs_final <- nrow(df)
+```
+
+
+```{r tabla_categorica}
+# <!-- Santi: Me parece util armar una po region y por tipo
+#             Me costo una banda lo del kable, así que vale cambiarlo -->
+
+t_region <- tabla_categorica(datos, "Region") %>%
+  rename(Categoria = Region) %>% mutate(Variable = "Region")
+
+t_tipo <- tabla_categorica(datos, "property_type") %>%
+  rename(Categoria = property_type) %>% mutate(Variable = "property_type") #
+
+bind_rows(t_region, t_tipo) %>%
+  select(Variable, Categoria, frec_abs, frec_rel) %>%
+  kable(booktabs = TRUE, digits = 3,
+        col.names = c("Variable", "Categoría", "Frec. absoluta", "Frec. relativa"),
+        caption = "Distribución de las variables categóricas principales.",
+        align = "llrr", format.args = list(big.mark = ".")) %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+  row_spec(0, bold = TRUE) %>%
+  pack_rows("Región", 1, nrow(t_region)) %>%
+  pack_rows("Tipo de propiedad", nrow(t_region) + 1, nrow(t_region) + nrow(t_tipo))
+```
+```{r}
+# <!-- Santi: lo mismo, vale cambiar el kable -->
+resumen_num(df, c("price","surface_total","surface_covered",
+                     "rooms","bedrooms","bathrooms","price_m2")) %>%
+  kable(booktabs = TRUE, digits = 1,
+        col.names = c("Variable","Media","Mediana","Desvío","Mínimo","Máximo"),
+        caption = "Resumen estadístico de las variables cuantitativas.",
+        align = "lrrrrr", format.args = list(big.mark = ".")) %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+  row_spec(0, bold = TRUE)
+```
+```{r dist_precio}
+ggplot(df, aes(x = price)) +
+  geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
+  tema
+
+ggplot(df, aes(x = price)) +
+  geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
+  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
+  tema
+```
+
+
+```{r box-precio}
+# <!-- Santi: Armo Box plots para los precios -->
+
+# Por tipo de propiedad
+ggplot(df, aes(x = property_type, y = price, fill = property_type)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.05) +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = NULL, y = "Precio [USD]") +
+  tema + theme(legend.position = "none") +
+  scale_fill_brewer(palette = pal)
+
+# Por categoría
+ggplot(df, aes(x = reorder(Region, price_m2, median), y = price, fill = Region)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.05,) +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = NULL, y = "Precio [USD]") +
+  tema + theme(legend.position = "none") +
+  scale_fill_brewer(palette = pal)
+```
+
+```{r barrios-caros-caba}
+# <!-- Santi: Creo que es interesante ver lo que ocurre en caba -->
+
+df %>%
+  filter(Region == "Capital Federal") %>%
+  group_by(barrio_localidad) %>%
+  summarise(n = n(), precio_mediano = median(price),
+            precio_m2_mediano = median(price_m2), .groups = "drop") %>%
+  filter(n >= 200) %>%
+  arrange(desc(precio_m2_mediano)) %>%
+  head(8) %>%
+  kable(booktabs = TRUE, digits = 0,
+        col.names = c("Barrio", "N", "Precio mediano (USD)", "Precio/m² mediano (USD)"),
+        caption = "Barrios de CABA más valorizados por precio del m² cubierto (mín. 200 registros).",
+        align = "lrrr", format.args = list(big.mark = ".")) %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+  row_spec(0, bold = TRUE)
+```
+
+```{r barrios-caros-caba}
+# <!-- Santi: Creo que es interesante ver si hay mucha diferencia Zona Sur| Zona Norte
+#             El violín acá viene barbaro para ver la diferencia en densidad-->
+
+df_barrios <- df %>%
+  filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste")) %>%
+  group_by(Region, barrio_localidad) %>%
+  summarise(median_price_m2 = median(price_m2),
+            q1_price_m2     = quantile(price_m2, 0.25), 
+            q3_price_m2     = quantile(price_m2, 0.75),
+            std_price_m2    = sd(price_m2),.groups = 'drop')
+
+ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
+  geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE) +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.7) +
+  scale_fill_brewer(palette = paleta) +
+  scale_color_brewer(palette = paleta) +
+  tema + 
+  labs(
+    x = NULL,
+    y = "Precio promedio por m² [USD]"
+  )
+
+# <!-- Santi: Hay que ponerlo más lindo, no llego -->
+
+df_barrios %>% 
+  ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
+                         y = median_price_m2, fill = Region)) +
+  geom_col(alpha = 0.7,show.legend = FALSE) +
+  coord_flip()+
+  geom_errorbar(aes(ymin = median_price_m2 - std_price_m2, 
+                    ymax = median_price_m2 + std_price_m2), width = 0.3)   +
+  facet_wrap(~Region, scales = "free_y")+
+  labs(x = NULL, 
+       y = "Precio mediano [USD]") +
+  theme_minimal()
+```
+
+```{r dist_precio}
+# <!-- Samti: Hay colas larguiiiiiiisimas. Para los ajustes harías esto 
+#             ó podemos hacerlo de 1 (y avisar) -->
+
+ggplot(df, aes(x = surface_covered)) +
+  geom_histogram(bins = 100, fill = "#66c2a5", alpha = 0.8) +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
+  tema
+
+lim_st <- as.numeric(quantile(datos$surface_total,   0.99))
+lim_sc <- as.numeric(quantile(datos$surface_covered, 0.99))
+
+df_mod <- df %>%
+  filter(price < 999999, surface_total <= lim_st, surface_covered <= lim_sc)
+
+ggplot(df_mod, aes(x = surface_covered)) +
+  geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
+  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
+  tema
+```
+
+
+```{r mtx_corr}
+# <!-- Santi: Si agarras la que te pase se nota en la columna de surface_covered -->
+
+num_vars <- df_mod %>% select(rooms, bedrooms, bathrooms,
+                             surface_total, surface_covered, price)
+M <- cor(num_vars)
+corrplot(M, method = "color", type = "upper", addCoef.col = "black",
+         tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+```
+```{r rls-comp}
+preds_rls <- c("surface_covered","bathrooms","rooms","bedrooms","surface_total")
+
+rls_tab <- map_dfr(preds_rls, function(v){
+  m <- lm(reformulate(v, "price"), data = df_mod)
+  tibble(Predictor = v,
+         R2 = summary(m)$r.squared,
+         RMSE = sqrt(mean(resid(m)^2)))
+}) %>% arrange(desc(R2))
+
+kable(rls_tab, booktabs = TRUE, digits = c(0,3,0),
+      col.names = c("Predictor", "R²", "RMSE [USD]"),
+      caption = "Modelos de RLS ordenados por capacidad explicativa.",
+      align = "lrr", format.args = list(decimal.mark = ",", big.mark=".")) %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+  row_spec(0, bold = TRUE)
+```
+
+
+```{r rls-fit}
+rls <- lm(price ~ surface_covered, data = df_mod)
+co <- summary(rls)$coefficients
+b0 <- co[1,1]; b1 <- co[2,1]
+r2_sc <- summary(rls)$r.squared
+r2_bath <- summary(lm(price ~ bathrooms, data = df_mod))$r.squared
+```
+
+
+
+
+```{r rls-plot}
+
+muestra <- df_mod %>% slice_sample(n = 4000)
+
+ggplot(muestra, aes(x = surface_covered, y = price)) +
+  geom_point(color = "#66c2a5", size = 1.2, alpha = 0.4) +
+  geom_smooth(method = "lm", color = "#fc8d62", se = TRUE) +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Superficie cubierta (m²)", y = "Precio (USD)") +
+  tema
+
+muestra <- muestra %>% mutate(ajustado = predict(rls, muestra),
+                              residuo = price - ajustado)
+ggplot(muestra, aes(x = ajustado, y = residuo)) +
+  geom_point(color = "#8da0cb", size = 1.2, alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#fc8d62") +
+  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio ajustado (USD)", y = "Residuo (USD)") +
+  tema
+```
+
+<!-- Santi: El ajuste no esta mal pero parece haber mucha palanca, se puede probar de sacarla
+            se puede usar la matriz hat (sombrero ¿?) despues te cuento y me decis que opinas -->
+            
+
+```{r rlm-comp}
+# Partición 80/20 
+#<!-- Santi: No se cuanto te parece -->
+
+idx <- createDataPartition(df_mod$price, p = 0.8, list = FALSE)
+train <- df_mod[idx, ]
+test <- df_mod[-idx, ]
+
+modelos <- tribble(
+  ~id,  ~formula,                                                              ~desc,
+  "M1", "price ~ surface_covered",                                            "Superficie cubierta",
+  "M2", "price ~ surface_covered + bathrooms",                               "+ baños",
+  "M3", "price ~ surface_covered + bathrooms + rooms",                       "+ ambientes",
+  "M4", "price ~ surface_covered + bathrooms + rooms + property_type",       "+ tipo",
+  "M5", "price ~ surface_covered + bathrooms + rooms + property_type + Region", "+ región",
+  "M6", "price ~ surface_covered * property_type + bathrooms + rooms + Region", "+ interacción sup X tipo"
+)
+
+rlm_res <- pmap_dfr(modelos, function(id, formula, desc){
+  f <- as.formula(formula)
+  
+  g <- glm(f, data = train)
+  modelo_lm <- lm(f, data = train)
+  k_params <- length(coef(g))
+  bic_val  <- BIC(g)
+  cv <- cv.glm(train, g, K = 10)$delta[1]
+  pred <- predict(g, test)
+  test_mse <- mean((test$price - pred)^2)
+  adj <- summary(modelo_lm)$adj.r.squared
+  tibble(
+    Modelo = id, 
+    Predictores = desc,
+    Parametros = k_params,
+    BIC = bic_val,
+    R2_aj = adj, 
+    MSE_CV = cv, 
+    MSE_Test = test_mse
+  )
+})
+
+rlm_res %>%
+  mutate(across(c(MSE_CV, MSE_Test), ~ .x / 1e9)) %>%
+  kable(
+    booktabs = TRUE, 
+    digits = c(0, 0, 0, 1, 3, 2, 2), 
+    col.names = c("Modelo", "Predictores (acumulados)", "Parámetros", "BIC", "R² aj.", "MSE Train (×10⁹)", "MSE Test (×10⁹)"),
+    caption = "Comparación de modelos de RLM por validación cruzada (10 folds)",
+    align = "llcrrrr" #
+  ) %>%
+  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(6, bold = TRUE) 
+```
+```{r}
+rlm_res_largo <- rlm_res %>%
+  select(Modelo, R2_aj, MSE_Test, BIC) %>%
+  pivot_longer(
+    cols = -Modelo, 
+    names_to = "Metrica", 
+    values_to = "Valor"
+  )
+
+# <!-- Santi: No supe poner la escala logarítmica independiente -->
+ggplot(rlm_res_largo, aes(x = Modelo, y = Valor, group = Metrica, color = Metrica)) +
+  geom_line(linewidth = 1, show.legend = FALSE) +
+  geom_point(size = 3, show.legend = FALSE) +
+  facet_wrap(~Metrica, scales = "free_y", ncol = 2) + 
+  scale_y_log10(labels = label_number(scale = 1e-9, suffix = "k")) +
+  theme_minimal() +
+  labs(
+    y = "Valor de la Métrica"
+  ) +
+  tema
+```
+
 
