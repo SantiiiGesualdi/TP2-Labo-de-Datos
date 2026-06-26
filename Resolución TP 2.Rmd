@@ -23,3 +23,51 @@ library(kableExtra)
 library(paletteer)
 
 ```
+
+```{r}
+datos <- read.csv("datosTP2_2026.csv", na.strings = c("NA", ""), stringsAsFactors = TRUE)
+```
+
+```{r}
+datos %>%
+  #Devuelve una fila con el porcentaje de NA de cada columna
+  summarise(across(everything(), ~ mean(is.na(.)))) %>% 
+  #Lo pasa a Variable | prop_na
+  pivot_longer(everything(), names_to = "variable", values_to = "prop_na") %>%
+  ggplot(aes(x = reorder(variable, prop_na), y = prop_na)) +
+  
+  #Genero las columnas, les pongo un puntito al final y el respectivo porcentaje que refiere
+  geom_col(fill = "#8da0cb", width = 0.3,alpha=0.5) +
+  geom_point(color = "#2c3e50", size = 2.5) +
+  geom_text(
+    aes(label = percent(prop_na, accuracy = 0.1)), 
+    hjust = -0.3, size = 3.5, color = "#2C3E50", fontface = "bold"
+  ) +
+  
+  #Las doy vuelta  y les acomodo el formato
+  coord_flip() +
+  scale_y_continuous(
+    labels = percent_format(), 
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    y = "Porcentaje de Datos Faltantes (NA)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 11, color = "#4A4A4A"),
+    axis.text.y = element_text(size = 11, face = "bold", color = "#2C3E50"),
+    plot.title = element_text(face = "bold", size = 14, color = "#1D3557", margin = margin(b = 8)),
+    plot.subtitle = element_text(size = 11, color = "#6C7A89", margin = margin(b = 20)),
+    axis.title.y = element_blank(),
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20) 
+  )
+
+datos_sin_na <- drop_na(data = datos)
+```
+
+
+```{r}
+summary(datos)
+```
+
