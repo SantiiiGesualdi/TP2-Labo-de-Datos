@@ -75,8 +75,8 @@ library(glue)
 
 library(ggplot2)
 library(ggrepel)
+library(ggh4x)
 library(scales)
-library(ComplexUpset)
 library(knitr)
 options(kableExtra.latex.load_packages = FALSE) 
 library(kableExtra)
@@ -86,6 +86,8 @@ library(corrplot)
 library(caret)
 
 library(boot)
+
+
 
 # Tema y paleta
 
@@ -113,13 +115,7 @@ datos %>%
   tema
 
 
-n_obs_tot <- nrow(datos)
-
-n_na_bath <- sum(is.na(datos$bathrooms))
-prop_na_bath <- n_na_bath / n_obs_tot
-datos_sin_na <- drop_na(data = datos)
 ```
-
 
 ```{r funciones_tablas}
 # Resumen de variables numéricas
@@ -148,43 +144,82 @@ tabla_categorica <- function(df, col){
 ```
 
 ```{r imputiacion_de_na}
-# <!-- Santi: Me parece que las consignas dan la pista para hacer esto
-#             Encima son muy poquitos, vale la pena --> Banco
+# Los datos NA's se imputan y se suplantan por la mediana según tipo y cantidad de habitaciones 
+# La justificación es que se encuentran correalcionadas fuertemente y los análsis, regresiones y demás
+# son realizados por precio que no se utiliza en la imputación
 
-df_limpio <- datos %>%
-  group_by(property_type, rooms) %>% # Razonable usar que las habitaciones y el tipo dan los baños
+n_obs_tot <- nrow(datos)
+
+n_na_bath <- sum(is.na(datos$bathrooms))
+prop_na_bath <- n_na_bath / n_obs_tot
+datos_sin_na <- drop_na(data = datos)
+
+
+datos <- datos %>%
+  group_by(property_type, rooms) %>% # Razonable usar que las habitaciones
+                                      # y el tipo dan los baños
   mutate(bathrooms = ifelse(is.na(bathrooms),
                             median(bathrooms, na.rm = TRUE), bathrooms)) %>%
   ungroup()
 
 
-# <!-- Cande: esto de abajo para que seria? no conviene hacer esto en los puntos necesarios y no crear tantas variables del mismo data set? o es solo para el eda?
 
-df_limpio$bathrooms[is.na(datos$bathrooms)] <- median(df_limpio$bathrooms, na.rm = TRUE)
-
-
-n_error_sup <- sum(datos$surface_covered > datos$surface_total) # No puede haber más superficie                                                                   # cubierta que superficie total 
+n_error_sup <- sum(datos$surface_covered > datos$surface_total) # No puede haber más superficie
+                                                                # cubierta que superficie total 
 
 n_error_rooms <- sum(datos$bedrooms > datos$rooms) # No pueden haber más habs. que ambs.
-df <- df_limpio %>% filter(surface_covered <= surface_total,
+df <- datos %>% filter(surface_covered <= surface_total,
                              bedrooms <= rooms)
 
 
-# <!-- Santi: Agrego Columna de precio x m2 -->
+# Se agrega columna de precio x m2
 df <- df %>% 
   mutate(price_m2  = price/surface_covered)
-
-
 
 
 n_obs_final <- nrow(df)
 ```
 
+```{r dist_precio}
+ggplot(df, aes(x = surface_total)) +
+  geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
+  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
+  tema
+
+# Se encuentran colas muy largas, se prefirió cortar por el 0.01 mayor perctil
+
+lim_st <- as.numeric(quantile(datos$surface_total,   0.99))
+lim_sc <- as.numeric(quantile(datos$surface_covered, 0.99))
+
+df_mod <- df %>%
+  filter(price < 999999, surface_total <= lim_st, surface_covered <= lim_sc)
+
+ggplot(df_mod, aes(x = surface_total)) +
+  geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
+  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
+  tema
+
+```
+
+```{r mtx_corr}
+num_vars <- df_mod %>% select(rooms, bedrooms, bathrooms,
+                             surface_total, surface_covered, price)
+M <- cor(num_vars)
+corrplot(M, method = "color", type = "upper", addCoef.col = "black",
+         tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+
+
+num_vars <- datos %>% select(rooms, bedrooms, bathrooms,
+                             surface_total, surface_covered, price)
+M <- cor(num_vars)
+corrplot(M, method = "color", type = "upper", addCoef.col = "black",
+         tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+
+```
 
 ```{r tabla_categorica}
-# <!-- Santi: Me parece util armar una po region y por tipo
-#             Me costo una banda lo del kable, así que vale cambiarlo -->
-
 t_region <- tabla_categorica(datos, "Region") %>%
   rename(Categoria = Region) %>% mutate(Variable = "Region")
 
@@ -202,8 +237,9 @@ bind_rows(t_region, t_tipo) %>%
   pack_rows("Región", 1, nrow(t_region)) %>%
   pack_rows("Tipo de propiedad", nrow(t_region) + 1, nrow(t_region) + nrow(t_tipo))
 ```
+
+
 ```{r}
-# <!-- Santi: lo mismo, vale cambiar el kable -->
 resumen_num(df, c("price","surface_total","surface_covered",
                      "rooms","bedrooms","bathrooms","price_m2")) %>%
   kable(booktabs = TRUE, digits = 1,
@@ -213,14 +249,16 @@ resumen_num(df, c("price","surface_total","surface_covered",
   kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
   row_spec(0, bold = TRUE)
 ```
+
+
 ```{r dist_precio}
-ggplot(df, aes(x = price)) +
+ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
   tema
 
-ggplot(df, aes(x = price)) +
+ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
@@ -229,8 +267,6 @@ ggplot(df, aes(x = price)) +
 
 
 ```{r box-precio}
-# <!-- Santi: Armo Box plots para los precios -->
-
 # Por tipo de propiedad
 ggplot(df, aes(x = property_type, y = price, fill = property_type)) +
   geom_boxplot(alpha = 0.7, outlier.alpha = 0.05) +
@@ -243,7 +279,7 @@ ggplot(df, aes(x = property_type, y = price, fill = property_type)) +
 ggplot(df, aes(x = reorder(Region, price_m2, median), y = price, fill = Region)) +
   geom_boxplot(alpha = 0.7, outlier.alpha = 0.05,) +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = NULL, y = "Precio [USD]") +
+  labs(x = NULL, y = "Precio [USD/m²]") +
   tema + theme(legend.position = "none") +
   scale_fill_brewer(palette = paleta)
 ```
@@ -254,17 +290,19 @@ ggplot(df, aes(x = reorder(Region, price_m2, median), y = price, fill = Region))
 df %>%
   filter(Region == "Capital Federal") %>%
   group_by(barrio_localidad) %>%
-  summarise(n = n(), precio_mediano = median(price),
-            precio_m2_mediano = median(price_m2), .groups = "drop") %>% # <!-- Cande: aca cambiara solo el nombre de la variable a mediana_precio_m2 para que sea mas descriptiva
+  summarise(n = n(), median_price = median(price),
+            median_price_m2 = median(price_m2), .groups = "drop") %>% # <!-- Cande: aca cambiara solo el   nombre de la variable a mediana_precio_m2 para que sea mas descriptiva
   filter(n >= 200) %>%
-  arrange(desc(precio_m2_mediano)) %>%
+  arrange(desc(median_price_m2)) %>%
   head(8) %>%
   kable(booktabs = TRUE, digits = 0,
-        col.names = c("Barrio", "N", "Precio mediano (USD)", "Precio/m² mediano (USD)"),
+        col.names = c("Barrio", "N", "Precio mediano [USD]", "Precio por m² mediano [USD/m²]"),
         caption = "Barrios de CABA más valorizados por precio del m² cubierto (mín. 200 registros).",
         align = "lrrr", format.args = list(big.mark = ".")) %>%
   kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
   row_spec(0, bold = TRUE)
+
+
 ```
 
 ```{r barrios-caros-caba}
@@ -272,75 +310,66 @@ df %>%
 #             El violín acá viene barbaro para ver la diferencia en densidad-->
 
 df_barrios <- df %>%
-  filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste")) %>%
+  filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste|Capital Federal")) %>%
   group_by(Region, barrio_localidad) %>%
   summarise(median_price_m2 = median(price_m2),
             q1_price_m2     = quantile(price_m2, 0.25), 
             q3_price_m2     = quantile(price_m2, 0.75),
             std_price_m2    = sd(price_m2),.groups = 'drop')
 
+
+
+
 ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
-  geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE) +
-  geom_jitter(width = 0.15, size = 2.5, alpha = 0.7) +
+  geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE, show.legend = FALSE) +
+  geom_jitter(width = 0.15, size = 2.5, alpha = 0.7, show.legend = FALSE) +
   scale_fill_brewer(palette = paleta) +
   scale_color_brewer(palette = paleta) +
   tema + 
   labs(
     x = NULL,
-    y = "Precio promedio por m² [USD]"
+    y = "Precio promedio por m² [USD/m²]"
+  ) +
+  theme(
+    strip.text = element_text(face = "bold"),      
+    axis.title.x = element_text(face = "bold"),  
+    axis.text.x = element_text(face = "bold"),
   )
 
 # <!-- Santi: Hay que ponerlo más lindo, no llego -->
 
-df_barrios %>% 
+df_barrios %>%
+  group_by(Region) %>%
+  filter(Region != "Capital Federal") %>% 
+  ungroup()  %>% 
+  # 1. Clean the region names to prevent truncation
+  mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
+  # 2. Cap the lower error bound at 0
+  mutate(lower_error = pmax(0, median_price_m2 - std_price_m2),
+         upper_error = median_price_m2 + std_price_m2) %>%
   ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
                          y = median_price_m2, fill = Region)) +
   geom_col(alpha = 0.7,show.legend = FALSE) +
   coord_flip()+
-  geom_errorbar(aes(ymin = median_price_m2 - std_price_m2, 
-                    ymax = median_price_m2 + std_price_m2), width = 0.3)   +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
+                    ymax = median_price_m2 + q3_price_m2), width = 0.3)   +
   facet_wrap(~Region, scales = "free_y")+
+  scale_fill_brewer(palette = paleta) +
+  scale_color_brewer(palette = paleta) +
   labs(x = NULL, 
-       y = "Precio mediano [USD]") +
-  theme_minimal()
+       y = "Precio promedio por m² [USD/m²]") +
+  tema +
+  theme(
+    strip.text = element_text(face = "bold"),      
+    axis.title.x = element_text(face = "bold"),   
+    axis.text.y = element_text(face = "bold") 
+  )
 
-# <!-- Cande: banco mucho estos graficos pero tenemos que pensar que hacer con las escalas de los dolares
-```
-
-```{r dist_precio}
-# <!-- Samti: Hay colas larguiiiiiiisimas. Para los ajustes harías esto 
-#             ó podemos hacerlo de 1 (y avisar) -->
-# <!-- Cande: a que te referis con colas?
-ggplot(df, aes(x = surface_covered)) +
-  geom_histogram(bins = 100, fill = "#66c2a5", alpha = 0.8) +
-  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
-  tema
-
-lim_st <- as.numeric(quantile(datos$surface_total,   0.99))
-lim_sc <- as.numeric(quantile(datos$surface_covered, 0.99))
-
-df_mod <- df %>%
-  filter(price < 999999, surface_total <= lim_st, surface_covered <= lim_sc)
-
-ggplot(df_mod, aes(x = surface_covered)) +
-  geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
-  scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
-  tema
 ```
 
 
-```{r mtx_corr}
-# <!-- Santi: Si agarras la que te pase se nota en la columna de surface_covered -->
 
-num_vars <- df_mod %>% select(rooms, bedrooms, bathrooms,
-                             surface_total, surface_covered, price)
-M <- cor(num_vars)
-corrplot(M, method = "color", type = "upper", addCoef.col = "black",
-         tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
-```
 ```{r rls-comp}
 preds_rls <- c("surface_covered","bathrooms","rooms","bedrooms","surface_total")
 
@@ -361,49 +390,79 @@ kable(rls_tab, booktabs = TRUE, digits = c(0,3,0),
 
 
 ```{r rls-fit}
-# <!-- Cande: aca solo acomodaria un poco la sintaxis/nombres para que sea mas buenas practicas friendly
-
 rls <- lm(price ~ surface_covered, data = df_mod)
-co <- summary(rls)$coefficients
-b0 <- co[1,1]; b1 <- co[2,1]
-r2_sc <- summary(rls)$r.squared
-r2_bath <- summary(lm(price ~ bathrooms, data = df_mod))$r.squared
+coefs <- summary(rls)$coefficients
+b0 <- coefs[1,1]
+b1 <- coefs[2,1]
+
+r2_sc <- summary(rls)$adj.r.squared
+
+r2_bath <- summary(lm(price ~ bathrooms, data = df_mod))$adj.r.squared
 ```
 
-
-
-
 ```{r rls-plot}
-
+set.seed(200)
 muestra <- df_mod %>% slice_sample(n = 4000)
 
 ggplot(muestra, aes(x = surface_covered, y = price)) +
   geom_point(color = "#66c2a5", size = 1.2, alpha = 0.4) +
   geom_smooth(method = "lm", color = "#fc8d62", se = TRUE) +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Superficie cubierta (m²)", y = "Precio (USD)") +
+  labs(x = "Superficie cubierta [m²]", y = "Precio [USD]") +
   tema
 
 muestra <- muestra %>% mutate(ajustado = predict(rls, muestra),
                               residuo = price - ajustado)
-ggplot(muestra, aes(x = ajustado, y = residuo)) +
+
+ggplot(muestra, aes(x = surface_covered, y = residuo)) +
   geom_point(color = "#8da0cb", size = 1.2, alpha = 0.4) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "#fc8d62") +
-  scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Precio ajustado (USD)", y = "Residuo (USD)") +
+  labs(x = "Superficie cubierta [m²]", y = "Residuo [USD]") +
   tema
 ```
+```{r rls_w}
+df_mod_2 <- df_mod
+df_mod_2$weights <- 1 / df_mod$surface_covered
+
+rls <- lm(price ~ surface_covered, data = df_mod_2, weights = df_mod_2$weights)
+coefs <- summary(rls)$coefficients
+b0 <- coefs[1,1]
+b1 <- coefs[2,1]
+
+r2_sc <- summary(rls)$adj.r.squared
+
+r2_bath <- summary(lm(price ~ bathrooms, data = df_mod))$adj.r.squared
+
+set.seed(200)
+muestra <- df_mod_2 %>% slice_sample(n = 4000)
+
+ggplot(muestra, aes(x = surface_covered, y = price, weight = weights)) +
+  geom_point(color = "#66c2a5", size = 1.2, alpha = 0.4) +
+  geom_smooth(method = "lm", color = "#fc8d62", se = TRUE) +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Superficie cubierta [m²]", y = "Precio [USD]") +
+  tema
+
+muestra <- muestra %>% mutate(ajustado = predict(rls, muestra),
+                              residuo = price - ajustado)
+
+ggplot(muestra, aes(x = surface_covered, y = residuo)) +
+  geom_point(color = "#8da0cb", size = 1.2, alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#fc8d62") +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  labs(x = "Superficie cubierta [m²]", y = "Residuo [USD]") +
+  tema
+```
+
 
 <!-- Santi: El ajuste no esta mal pero parece haber mucha palanca, se puede probar de sacarla
             se puede usar la matriz hat (sombrero ¿?) despues te cuento y me decis que opinas -->
             
 
 ```{r rlm-comp}
+set.seed(200)
 # Partición 80/20 
-#<!-- Santi: No se cuanto te parece -->
-# <!-- Cande: habria que setear una semilla porque sino siempre nos va a dar distinto
-
 idx <- createDataPartition(df_mod$price, p = 0.8, list = FALSE)
 train <- df_mod[idx, ]
 test <- df_mod[-idx, ]
@@ -426,7 +485,6 @@ rlm_res <- pmap_dfr(modelos, function(id, formula, desc){
   g <- glm(f, data = train)
   modelo_lm <- lm(f, data = train)
   k_params <- length(coef(g))
-  bic_val  <- BIC(g)
   cv <- cv.glm(train, g, K = 10)$delta[1]
   pred <- predict(g, test)
   test_mse <- mean((test$price - pred)^2)
@@ -435,7 +493,6 @@ rlm_res <- pmap_dfr(modelos, function(id, formula, desc){
     Modelo = id, 
     Predictores = desc,
     Parametros = k_params,
-    BIC = bic_val, # <!-- Cande: que es bic?
     R2_aj = adj, 
     MSE_CV = cv, 
     MSE_Test = test_mse
@@ -446,35 +503,43 @@ rlm_res %>%
   mutate(across(c(MSE_CV, MSE_Test), ~ .x / 1e9)) %>%
   kable(
     booktabs = TRUE, 
-    digits = c(0, 0, 0, 1, 3, 2, 2), 
-    col.names = c("Modelo", "Predictores (acumulados)", "Parámetros", "BIC", "R² aj.", "MSE Train (×10⁹)", "MSE Test (×10⁹)"),
+    digits = c(0, 0, 0, 3, 2, 2), 
+    col.names = c("Modelo", "Predictores (acumulados)", "Parámetros", "R² aj.", "MSE Train (×10⁹)", "MSE Test (×10⁹)"),
     caption = "Comparación de modelos de RLM por validación cruzada (10 folds)",
-    align = "llcrrrr" #
+    align = "llcrrr" #
   ) %>%
   kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
   row_spec(0, bold = TRUE) %>%
   row_spec(6, bold = TRUE) 
 ```
-```{r}
-rlm_res_largo <- rlm_res %>%
-  select(Modelo, R2_aj, MSE_Test, BIC) %>% 
-  pivot_longer(
-    cols = -Modelo, 
-    names_to = "Metrica", 
-    values_to = "Valor"
-  )
 
-# <!-- Santi: No supe poner la escala logarítmica independiente -->
-ggplot(rlm_res_largo, aes(x = Modelo, y = Valor, group = Metrica, color = Metrica)) +
-  geom_line(linewidth = 1, show.legend = FALSE) +
-  geom_point(size = 3, show.legend = FALSE) +
-  facet_wrap(~Metrica, scales = "free_y", ncol = 2) + 
-  scale_y_log10(labels = label_number(scale = 1e-9, suffix = "k")) +
+
+```{r}
+rlm_res %>%
+  ggplot(aes(x = Modelo, y = R2_aj, group = 1)) +
+  geom_line(linewidth = 1, color = "#7CAE00") +
+  geom_point(size = 3, color = "#7CAE00", alpha = 0.7) +
+  scale_y_continuous(labels = label_number(accuracy = 0.01)) +
+  labs(title = "R² Ajustado", y = "Valor", x = NULL) +
   theme_minimal() +
-  labs(
-    y = "Valor de la Métrica"
+  tema +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+
+rlm_res %>%
+  ggplot(aes(x = Modelo, y = MSE_CV, group = 1)) +
+  geom_line(linewidth = 1, color = "#00BFC4") +
+  geom_point(size = 3, color = "#00BFC4", alpha = 0.7) +
+  scale_y_continuous(
+    breaks = breaks_pretty(n = 4),
+    labels = label_number(scale = 1e-6, suffix = "M")
   ) +
-  tema
+  labs(title = "MSE (CV)", y = "Valor", x = NULL) +
+  theme_minimal() +
+  tema +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(face = "bold"))
+  
 ```
 
 
