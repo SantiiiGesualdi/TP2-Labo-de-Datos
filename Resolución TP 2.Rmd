@@ -34,8 +34,6 @@ header-includes:
   - \titleformat{\section}{\fontsize{16}{18}\bfseries}{\thesection}{1em}{}
   - \titleformat{\subsection}{\fontsize{14}{16}\bfseries}{\thesubsection}{1em}{}
   
-  - \renewcommand{\contentsname}{Contenidos}
-  
   - \definecolor{gris}{RGB}{89, 88, 88}
 
   - \usepackage{titling}
@@ -62,7 +60,15 @@ header-includes:
 
 
 \newpage
-...
+
+# Introducción
+
+El mercado inmobiliario es un sector dinámico cuya comprensión resulta fundamental para diversos actores económicos y sociales. En este contexto, el presente informe analiza un conjunto de datos que reúne información sobre precios de viviendas en la Ciudad Autónoma de Buenos Aires (CABA) y el Gran Buenos Aires correspondiente al año 2020. Los datos analizados provienen de la plataforma Kaggle (Properati Data) y han sido adaptados con fines didácticos para este estudio.
+La importancia de abordar este análisis radica en la necesidad de identificar qué factores, ya sean características edilicias (como superficie, cantidad de ambientes o baños) o localización geográfica, inciden de manera determinante en la valoración de una propiedad. Comprender estas relaciones es clave para interpretar el funcionamiento del mercado, detectar patrones de comportamiento y aportar evidencia que permita tomar decisiones informadas en contextos de compra, venta o planificación urbana.
+Además, el mercado inmobiliario presenta una marcada heterogeneidad, propiedades con configuraciones similares pueden exhibir precios muy distintos según su ubicación, distribución interna o condiciones edilicias. Esta variabilidad hace que el análisis estadístico y el modelado predictiva resulten herramientas especialmente valiosas para estudiar esta dinámica. En este trabajo se emplean métodos de regresión lineal simple y múltiple para evaluar la capacidad de distintas variables de explicar el precio de las viviendas, así como técnicas de agrupamiento para identificar conjuntos de propiedades con características estructurales comparables dentro de la región de Capital Federal.
+El problema central que busca resolver este trabajo es la identificación de patrones y relaciones entre las variables físicas de las viviendas y su valor de mercado, así como la agrupación de las propiedades en conjuntos con características homogéneas. En función de ello, el objetivo principal del informe es evaluar la capacidad predictiva de distintos modelos y caracterizar los grupos resultantes, aportando una visión integral del comportamiento del mercado inmobiliario en el área analizada.
+
+# Metodología
 
 ```{r setup, warning = FALSE, message = FALSE, echo = FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, fig.pos = "H", fig.align = "center")
@@ -86,6 +92,7 @@ library(corrplot)
 library(caret)
 
 library(boot)
+library(factoextra)
 
 
 
@@ -100,6 +107,63 @@ paleta <- "Set2"
 datos <- read.csv("datosTP2_2026.csv", na.strings = c("NA", ""), stringsAsFactors = TRUE)
 ```
 
+
+<!-- Cande: aca no servia usar el codigo de lo anterior como base ya que creaba una tabla por variable y no queremos eso, ademas tenemos que incluir nas en esta misma tabla. Asi que lo acomode un poco para tambien solo usar cosas de dplyr que vimos en las practicas y que quede con el tamaño de letra que pidieron--> 
+
+```{r descripcion_numericas}
+
+tabla_numericas <- datos %>%
+  select(where(is.numeric), -Id) %>%
+  pivot_longer(cols = everything(), 
+               names_to = "variable", 
+               values_to = "valor") %>%
+  group_by(variable) %>%
+  summarise(
+    media = mean(valor, na.rm = TRUE),
+    mediana = median(valor, na.rm = TRUE),
+    desvio_estandar = sd(valor, na.rm = TRUE),
+    minimo = min(valor, na.rm = TRUE),
+    maximo = max(valor, na.rm = TRUE),
+    nas = sum(is.na(valor))
+  )
+
+
+kable(tabla_numericas, caption = "Estadísticos descriptivos de las variables númericas", col.names = c("Variable", "Media", "Mediana", "Desvío estándar", "Mínimo", "Máximo", "Datos Faltantes"), digits = 2, align = "lrrrrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+  kable_styling(latex_options = c("HOLD_position")) %>% 
+  row_spec(0, bold = TRUE)
+
+
+```
+```{r descripcion_categoricas}
+tabla_categoricas <- datos %>%
+  select(where(is.factor), -Pais, -barrio_localidad) %>%
+  pivot_longer(cols = everything(), 
+               names_to = "variable", 
+               values_to = "categoria") %>%
+  
+  group_by(variable) %>%
+  mutate(cantidad_nas = sum(is.na(categoria))) %>%
+  
+  filter(!is.na(categoria)) %>%
+  group_by(variable, categoria, cantidad_nas) %>%
+  summarise(frec_abs = n(), .groups = "drop") %>%
+  
+  group_by(variable) %>%
+  mutate(frec_rel = round(frec_abs / sum(frec_abs), 2)) %>%
+  
+  ungroup() %>%
+  select(variable, categoria, frec_abs, frec_rel, cantidad_nas) %>% 
+  
+  mutate(variable = recode(variable, "property_type" = "Tipo de propiedad"))
+  
+
+kable(tabla_categoricas, caption = "Distribución de frecuencias de las variables categóricas principales", col.names = c("Variable", "Categoria", "Frecuencia absoluta", "Frecuencia relativa", "Datos faltantes"), digits = 2, align = "llrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+  kable_styling(latex_options = c("HOLD_position")) %>% 
+  row_spec(0, bold = TRUE)
+```
+
+
+<!-- Cande: a este grafico lo amo pero no se si es necesario mostrarlo si mostramos los nas en las tablas, capaz podemos ponerlo en los anexos(?--> 
 ```{r tablita_na}
 datos %>%
   summarise(across(everything(), ~ mean(is.na(.)))) %>%
@@ -114,35 +178,9 @@ datos %>%
   labs(y = "Porcentaje de datos faltantes (NA)", x = NULL) +
   tema
 
-
 ```
 
-```{r funciones_tablas}
-# Resumen de variables numéricas
-resumen_num <- function(df, cols){
-  df %>%
-    summarise(across(all_of(cols), list(
-      media   = ~mean(.x, na.rm = TRUE),
-      mediana = ~median(.x, na.rm = TRUE),
-      sd      = ~sd(.x, na.rm = TRUE),
-      min     = ~min(.x, na.rm = TRUE),
-      max     = ~max(.x, na.rm = TRUE)),
-      .names = "{.col}__{.fn}")) %>%
-    pivot_longer(everything(),
-                 names_to = c("Variable", ".value"),
-                 names_sep = "__")
-}
-
-# Frecuencias de variables categórica
-tabla_categorica <- function(df, col){
-  df %>%
-    filter(!is.na(.data[[col]])) %>%
-    count(.data[[col]], name = "frec_abs") %>%
-    mutate(frec_rel = frec_abs / sum(frec_abs)) %>%
-    arrange(desc(frec_abs))
-}
-```
-
+<!-- Cande: yo no imputaria los na's, solo los eliminaria, por lo que veo, no tenemos suficiente evidencia o un analisis profundo como para imputarlos, representan tan poco en la cantidad total de observaciones que me parece que lo mejor es eliminarlos. No se si capaz vos tenes alguna justificacion mas detallada/explicativa, ahí capaz si -->
 ```{r imputiacion_de_na}
 # Los datos NA's se imputan y se suplantan por la mediana según tipo y cantidad de habitaciones 
 # La justificación es que se encuentran correalcionadas fuertemente y los análsis, regresiones y demás
@@ -180,15 +218,20 @@ df <- df %>%
 n_obs_final <- nrow(df)
 ```
 
-```{r dist_precio}
+
+<!-- Cande: aca hay que elegir cual usar, separe en dos chunks xq no puede haber mas de una figura por chunk, a parte asi podemos elegir cual mostrar y cual no solo poniendo INCLUDE=FALSE en el encabezado del chunk. Yo usaria el comun simplemente xq no veo mucha diferencia pero me da igual, si tenes alguna mejor razon joya-->
+```{r distribucion_precio}
 ggplot(df, aes(x = surface_total)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
   tema
 
-# Se encuentran colas muy largas, se prefirió cortar por el 0.01 mayor perctil
+# Se encuentran colas muy largas, se prefirió cortar por el 0.01 mayor perctil <!-- Cande: aca quisiste decir por el percentil mayor? o sea el Q3=0.75? -->
 
+```
+
+```{r distribucion_precio_modificado}
 lim_st <- as.numeric(quantile(datos$surface_total,   0.99))
 lim_sc <- as.numeric(quantile(datos$surface_covered, 0.99))
 
@@ -200,64 +243,56 @@ ggplot(df_mod, aes(x = surface_total)) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
   tema
-
 ```
 
-```{r mtx_corr}
-num_vars <- df_mod %>% select(rooms, bedrooms, bathrooms,
+<!-- Cande: lo mismo aca, separo los chunks. No veo diferencia, o sea, sí la hay numericamente pero si te fijas el orden de correlacion es el mismo. Esto tambien lo pondria en un anexo -->
+```{r matriz_correlacion_modificado}
+numeric_vars_modif <- df_mod %>% select(rooms, bedrooms, bathrooms,
                              surface_total, surface_covered, price)
-M <- cor(num_vars)
+M <- cor(numeric_vars_modif)
 corrplot(M, method = "color", type = "upper", addCoef.col = "black",
          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+```
 
-
-num_vars <- datos %>% select(rooms, bedrooms, bathrooms,
+```{r matriz_correlacion}
+numeric_vars <- datos %>% select(rooms, bedrooms, bathrooms,
                              surface_total, surface_covered, price)
-M <- cor(num_vars)
+M <- cor(numeric_vars)
 corrplot(M, method = "color", type = "upper", addCoef.col = "black",
          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
-
 ```
 
-```{r tabla_categorica}
-t_region <- tabla_categorica(datos, "Region") %>%
-  rename(Categoria = Region) %>% mutate(Variable = "Region")
-
-t_tipo <- tabla_categorica(datos, "property_type") %>%
-  rename(Categoria = property_type) %>% mutate(Variable = "property_type") #
-
-bind_rows(t_region, t_tipo) %>%
-  select(Variable, Categoria, frec_abs, frec_rel) %>%
-  kable(booktabs = TRUE, digits = 3,
-        col.names = c("Variable", "Categoría", "Frec. absoluta", "Frec. relativa"),
-        caption = "Distribución de las variables categóricas principales.",
-        align = "llrr", format.args = list(big.mark = ".")) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
-  row_spec(0, bold = TRUE) %>%
-  pack_rows("Región", 1, nrow(t_region)) %>%
-  pack_rows("Tipo de propiedad", nrow(t_region) + 1, nrow(t_region) + nrow(t_tipo))
-```
-
+<!-- Cande: esto es lo que te decia el otro dia de hacer boxplots por variable, no se ve mucho por tema escalas pero era para ver datos atipicos especificamente por variable (sin relacionarla a otra cosa) -->
 
 ```{r}
-resumen_num(df, c("price","surface_total","surface_covered",
-                     "rooms","bedrooms","bathrooms","price_m2")) %>%
-  kable(booktabs = TRUE, digits = 1,
-        col.names = c("Variable","Media","Mediana","Desvío","Mínimo","Máximo"),
-        caption = "Resumen estadístico de las variables cuantitativas.",
-        align = "lrrrrr", format.args = list(big.mark = ".")) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
-  row_spec(0, bold = TRUE)
+datos_numeric <- datos_sin_na %>% 
+  select(rooms, bedrooms, bathrooms, surface_total, surface_covered, price)
+
+for(col in colnames(datos_numeric)){
+ boxplot <- ggplot(datos_numeric, aes(y = .data[[col]])) +
+    geom_boxplot() +
+    theme_minimal()
+ 
+ print(boxplot)
+}
 ```
 
 
-```{r dist_precio}
+# Resultados
+
+<!-- Cande: a partir de aca es EDA para el analisis directo de la var precio, no es descripcion ni exploracion del dataset creo yo -->
+
+<!-- Cande: ok aca si se ve la diferencia, pero tengo sentimientos encontrados no se cual elegir, tipo, capaz siento que esta bien que se vea que se acumula todo en los precios "bajos" y que las que tienen precios mas altos son unas pocas. -->
+
+```{r distribucion_precio_2}
 ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
   tema
 
+```
+```{r distribucion_precio_2_log}
 ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
@@ -265,7 +300,7 @@ ggplot(df_mod, aes(x = price)) +
   tema
 ```
 
-
+<!-- Cande: estos quedaron re lindos pero no se si son utiles en realidad -->
 ```{r box-precio}
 # Por tipo de propiedad
 ggplot(df, aes(x = property_type, y = price, fill = property_type)) +
@@ -284,31 +319,7 @@ ggplot(df, aes(x = reorder(Region, price_m2, median), y = price, fill = Region))
   scale_fill_brewer(palette = paleta)
 ```
 
-```{r barrios-caros-caba}
-# <!-- Santi: Creo que es interesante ver lo que ocurre en caba -->
-
-df %>%
-  filter(Region == "Capital Federal") %>%
-  group_by(barrio_localidad) %>%
-  summarise(n = n(), median_price = median(price),
-            median_price_m2 = median(price_m2), .groups = "drop") %>% # <!-- Cande: aca cambiara solo el   nombre de la variable a mediana_precio_m2 para que sea mas descriptiva
-  filter(n >= 200) %>%
-  arrange(desc(median_price_m2)) %>%
-  head(8) %>%
-  kable(booktabs = TRUE, digits = 0,
-        col.names = c("Barrio", "N", "Precio mediano [USD]", "Precio por m² mediano [USD/m²]"),
-        caption = "Barrios de CABA más valorizados por precio del m² cubierto (mín. 200 registros).",
-        align = "lrrr", format.args = list(big.mark = ".")) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
-  row_spec(0, bold = TRUE)
-
-
-```
-
-```{r barrios-caros-caba}
-# <!-- Santi: Creo que es interesante ver si hay mucha diferencia Zona Sur| Zona Norte
-#             El violín acá viene barbaro para ver la diferencia en densidad-->
-
+```{r analisis_barrios}
 df_barrios <- df %>%
   filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste|Capital Federal")) %>%
   group_by(Region, barrio_localidad) %>%
@@ -317,9 +328,8 @@ df_barrios <- df %>%
             q3_price_m2     = quantile(price_m2, 0.75),
             std_price_m2    = sd(price_m2),.groups = 'drop')
 
-
-
-
+```
+```{r densidadesXregion}
 ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
   geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE, show.legend = FALSE) +
   geom_jitter(width = 0.15, size = 2.5, alpha = 0.7, show.legend = FALSE) +
@@ -336,8 +346,10 @@ ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
     axis.text.x = element_text(face = "bold"),
   )
 
-# <!-- Santi: Hay que ponerlo más lindo, no llego -->
+```
 
+<!-- Cande: esto necesita comentarios explicativos -->
+```{r precioXbarrio}
 df_barrios %>%
   group_by(Region) %>%
   filter(Region != "Capital Federal") %>% 
@@ -365,42 +377,120 @@ df_barrios %>%
     axis.title.x = element_text(face = "bold"),   
     axis.text.y = element_text(face = "bold") 
   )
-
 ```
 
 
 
-```{r rls-comp}
-preds_rls <- c("surface_covered","bathrooms","rooms","bedrooms","surface_total")
 
-rls_tab <- map_dfr(preds_rls, function(v){
-  m <- lm(reformulate(v, "price"), data = df_mod)
-  tibble(Predictor = v,
-         R2 = summary(m)$r.squared,
-         RMSE = sqrt(mean(resid(m)^2)))
-}) %>% arrange(desc(R2))
+<!-- Cande: hay que redactar mejor esto obviamente pero como para ir teniendo una guia de las decisiones -->
 
-kable(rls_tab, booktabs = TRUE, digits = c(0,3,0),
-      col.names = c("Predictor", "R²", "RMSE [USD]"),
-      caption = "Modelos de RLS ordenados por capacidad explicativa.",
-      align = "lrr", format.args = list(decimal.mark = ",", big.mark=".")) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+En la matriz de correlacion se observa como las variables que mas se correlacionan con el precio son bathrooms, surface_covered, rooms y bedrooms, asi que evaluaremos cada modelo con esas vars como predictoras de precio
+
+<!-- Cande: aca faltaba validar asi que sume k-folds para depaso elegir la mejor predictora y tambien usar lo del MSE que vimos en clase, la idea seria maso esta que escribi abajo -->
+
+Para cumplir con el objetivo de maximizar la capacidad predictiva del modelo (Consigna 2), no se seleccionó el predictor basándose únicamente en el ajuste del set de entrenamiento (R2), el cual puede ser sensible a puntos de alta palanca. En su lugar, se compararon los modelos candidatos mediante Validación Cruzada de 10 folds, seleccionando la variable que minimizó el Error Cuadrático Medio de validación, garantizando así una mejor generalización ante datos no observados.
+
+<!-- Cande: para no olvidarme, RMSE lo mencionan en "Practical Data Science with R" -->
+
+```{r rls_composicion}
+posibles_predictoras <- c("bathrooms", "surface_covered", "rooms", "bedrooms") # <!-- Cande: saque surface_total xq tenia una correlacion muy baja en comparacion a las otras en la matriz -->
+
+# Preparamos una tabla para guardar los resultados finales
+resumen_metricas <- data.frame(variable = posibles_predictoras, r2_promedio = 0, mse_promedio = 0, rmse_promedio = 0)
+resultados_detallados <- list()
+
+set.seed(5)
+
+folds <- createFolds(df$price, k = 10)
+
+# recorremos cada variable predictora
+for (i in 1:length(posibles_predictoras)) {
+  
+  variable_actual <- posibles_predictoras[i]
+  r2_por_fold <- numeric(10)
+  mse_por_fold <- numeric(10)
+  
+  # recorremos los 10 folds
+  for (k in 1:10) {
+    # Seleccionamos los índices para validación en esta iteración
+    indices_val <- folds[[k]]
+    
+    # Dividimos el dataset
+    train_fold <- df[-indices_val, ]
+    val_fold <- df[indices_val, ]
+    
+    # Ajustamos el modelo RLS con los datos de entrenamiento
+    formula_rls <- as.formula(paste("price ~", variable_actual))
+    modelo <- lm(formula_rls, data = train_fold)
+    
+    # Predecimos sobre el conjunto de validacion
+    predicciones <- predict(modelo, val_fold)
+    
+    r2_por_fold[k] <- summary(modelo)$r.squared
+    mse_por_fold[k] <- mean((predicciones - val_fold$price)^2)
+  }
+  
+  resultados_detallados[[i]] <- data.frame(
+    variable = variable_actual,
+    fold = 1:10,
+    mse = mse_por_fold,
+    rmse = sqrt(mse_por_fold) # Expresado en dólares para entenderlo mejor
+  )
+  
+  # Guardamos los promedios finales para esta variable
+  resumen_metricas$r2_promedio[i] <- mean(r2_por_fold)
+  resumen_metricas$mse_promedio[i] <- mean(mse_por_fold)
+  resumen_metricas$rmse_promedio[i] <- sqrt(mean(mse_por_fold))
+}
+
+# Ordenamos para encontrar la que tiene el menor error
+resumen_metricas <- resumen_metricas %>% arrange(rmse_promedio)
+
+kable(resumen_metricas, caption = "Modelos de RLS ordenados por capacidad explicativa", col.names = c("Predictora", "r2", "MSE", "RMSE"), digits = 2, align = "lrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+  kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
+
 ```
 
+```{r evaluacion_kfolds}
+# <!-- Cande: esto es para evaluar que efectivamente cualquiera sea la variable con menor RMSE cree un modelo fuerte/robusto y no simplemente sea un fold en especifico que disminuyó el promedio drasticamente. Yo como para mostrar que hicimos un analisis profundo y no solo elegimos la primera que salio porque si-->
+tabla_completa_cv <- bind_rows(resultados_detallados) 
+tabla_completa_cv
+```
 
-```{r rls-fit}
-rls <- lm(price ~ surface_covered, data = df_mod)
-coefs <- summary(rls)$coefficients
+Si bien la variable bathrooms es la que menos RMSE presenta, al ser discreta y no continua, no construye un buen modelo predictivo para price por si sola, esto incluso lo podemos visualizar en el siguiente scatter plot donde se observa que claramente no hay una relacion linear y el modelo no ajusta bien. Por lo que, elegiremos surface_covered como variable predictora
+
+<!-- Cande: igual esto no lo mostraria, solo mencionaria que lo tuvimos en cuenta y lo dejamos solo en este archivo .rmd -->
+```{r rls_bathrooms}
+rls_bathrooms <- lm(price ~ bathrooms, df)
+coefs <- summary(rls_bathrooms)$coefficients
 b0 <- coefs[1,1]
 b1 <- coefs[2,1]
 
-r2_sc <- summary(rls)$adj.r.squared
 
-r2_bath <- summary(lm(price ~ bathrooms, data = df_mod))$adj.r.squared
+df %>% 
+  group_by(bathrooms) %>% 
+  summarise(mean_price = mean(price, na.rm = TRUE)) %>% 
+  ggplot(aes(x = bathrooms, y = mean_price)) +
+  geom_point() +
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  geom_abline(intercept = b0, slope = b1, color = "red") +
+  labs(x = "Baños", y = "Precio [USD]") +
+  tema
+```
+```{r rls_surface_fit}
+# <!-- Cande: esto es para informar los valores y explicar que representan?-->
+rls_surface <- lm(price ~ surface_covered, data = df_mod)
+coeficientes <- summary(rls)$coefficients
+b0 <- coeficientes[1,1]
+b1 <- coeficientes[2,1]
+
+r2_sc <- summary(rls)$adj.r.squared 
 ```
 
-```{r rls-plot}
+
+<!-- Cande: aca hay que comentar bien por que usamos una muestra -->
+```{r rls_surface_plot}
 set.seed(200)
 muestra <- df_mod %>% slice_sample(n = 4000)
 
@@ -411,8 +501,7 @@ ggplot(muestra, aes(x = surface_covered, y = price)) +
   labs(x = "Superficie cubierta [m²]", y = "Precio [USD]") +
   tema
 
-muestra <- muestra %>% mutate(ajustado = predict(rls, muestra),
-                              residuo = price - ajustado)
+muestra <- muestra %>% mutate(ajustado = predict(rls, muestra), residuo = price - ajustado)
 
 ggplot(muestra, aes(x = surface_covered, y = residuo)) +
   geom_point(color = "#8da0cb", size = 1.2, alpha = 0.4) +
@@ -421,6 +510,9 @@ ggplot(muestra, aes(x = surface_covered, y = residuo)) +
   labs(x = "Superficie cubierta [m²]", y = "Residuo [USD]") +
   tema
 ```
+
+
+<!-- Cande: esto de aca abajo es haciendo lo de los pesos que mencionaste? -->
 ```{r rls_w}
 df_mod_2 <- df_mod
 df_mod_2$weights <- 1 / df_mod$surface_covered
@@ -454,92 +546,247 @@ ggplot(muestra, aes(x = surface_covered, y = residuo)) +
   labs(x = "Superficie cubierta [m²]", y = "Residuo [USD]") +
   tema
 ```
-
-
 <!-- Santi: El ajuste no esta mal pero parece haber mucha palanca, se puede probar de sacarla
             se puede usar la matriz hat (sombrero ¿?) despues te cuento y me decis que opinas -->
             
+            
+```{r funciones_seleccion_forward}
+calculo_MSE <- function(y_pred, y_real){
+   res <- mean((y_pred - y_real)^2)
+   return(res)
+}
 
-```{r rlm-comp}
-set.seed(200)
-# Partición 80/20 
-idx <- createDataPartition(df_mod$price, p = 0.8, list = FALSE)
-train <- df_mod[idx, ]
-test <- df_mod[-idx, ]
+agregar_variable <- function(nueva_predictora, df0, dataframe) {
+  df0[,nueva_predictora] <- dataframe[,nueva_predictora] # toma una columna especifica de un df de referencia y la inserta en otro dataframe
+  return(df0)
+}
 
-modelos <- tribble(
-  ~id,  ~formula,                                                              ~desc,
-  "M1", "price ~ surface_covered",                                            "Superficie cubierta",
-  "M2", "price ~ surface_covered + bathrooms",                               "+ baños",
-  "M3", "price ~ surface_covered + bathrooms + rooms",                       "+ ambientes",
-  "M4", "price ~ surface_covered + bathrooms + rooms + property_type",       "+ tipo",
-  "M5", "price ~ surface_covered + bathrooms + rooms + property_type + Region", "+ región",
-  "M6", "price ~ surface_covered * property_type + bathrooms + rooms + Region", "+ interacción sup X tipo"
-)
-
-# <!-- Cande: a partir de aca me tarda bastante en correr, eso es raro (mi compu es bastante rapida porque es nuevita). Creo que debe ser por algo del orden y la sintaxis correcta, despues chequeo bien las diapos para recordar como era
-
-rlm_res <- pmap_dfr(modelos, function(id, formula, desc){
-  f <- as.formula(formula)
+# función núcleo de cada iteración del algoritmo forward. El objetivo es medir que "tan buena" es una variable candidata para ser la próxima en entrar al modelo
+evaluar_predictora <- function(predictora, df0, dataframe, variable_respuesta){
+  # agregamos a df0 la predictora a evaluar con una funcion auxiliar
+  df_parcial <- agregar_variable(predictora, df0, dataframe)
   
-  g <- glm(f, data = train)
-  modelo_lm <- lm(f, data = train)
-  k_params <- length(coef(g))
-  cv <- cv.glm(train, g, K = 10)$delta[1]
-  pred <- predict(g, test)
-  test_mse <- mean((test$price - pred)^2)
-  adj <- summary(modelo_lm)$adj.r.squared
-  tibble(
-    Modelo = id, 
-    Predictores = desc,
-    Parametros = k_params,
-    R2_aj = adj, 
-    MSE_CV = cv, 
-    MSE_Test = test_mse
-  )
-})
+  # la formula contiene todas las predictoras disponibles
+  f <- as.formula(paste0(variable_respuesta, "~ ."))
+  
+  modelo <- lm(f, data = df_parcial) # ajustamos un modelo lineal usando solo los datos del df de trabajo
+  mse <- mean(modelo$residuals**2) # calculamos el MSE de entrenamiento
+  resultados <- list(df_nuevo = df_parcial, MSE = mse) 
+  return(resultados)
+}
 
-rlm_res %>%
-  mutate(across(c(MSE_CV, MSE_Test), ~ .x / 1e9)) %>%
-  kable(
-    booktabs = TRUE, 
-    digits = c(0, 0, 0, 3, 2, 2), 
-    col.names = c("Modelo", "Predictores (acumulados)", "Parámetros", "R² aj.", "MSE Train (×10⁹)", "MSE Test (×10⁹)"),
-    caption = "Comparación de modelos de RLM por validación cruzada (10 folds)",
-    align = "llcrrr" #
-  ) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
-  row_spec(0, bold = TRUE) %>%
-  row_spec(6, bold = TRUE) 
+encontrar_orden_predictoras <- function(nombre_respuesta, dataframe){
+  orden_predictoras <- c() # aca guardaremos la secuencia en la que entran las variables
+  MSE <- c() # aca vamos a guardar el MSE de entrenamiento alcanzado en cada paso tras decidir qué variable agregar
+  
+  # inicializamos un df que tiene solamente la variable respuesta
+  df_parcial <- dataframe[, nombre_respuesta, drop=F] 
+  
+  while (dim(df_parcial)[2] != dim(dataframe)[2]){ # mientras falten variables por agregar (es decir, el numero de columnas de df parcial sea distinto al df original)
+    
+    MSEt <- c() # aca guardamos los MSE de entrenamiento
+    columnas_evaluadas <- c()
+    
+    for(col in names(dataframe)){ # recorremos las columnas del dataset original
+      
+      if (!(col %in% names(df_parcial))){ # col no esta ya agregada
+        columnas_evaluadas <- c(columnas_evaluadas, col) 
+        MSEt <- c(MSEt, evaluar_predictora(col, df_parcial, dataframe, nombre_respuesta)$MSE) 
+        # llamamos a la fun auxiliar para ajustar el modelo lineal con las variables ya seleccionadas mas la nueva candidata, obteniendo el MSE de entrenamiento 
+      }
+      
+    } # aca empieza la logica de seleccion greedy
+    mejor_predictora <- columnas_evaluadas[which.min(MSEt)] # identificamos cuál de las variables evaluadas produjo el MSE de entrenamiento mas bajo
+    
+    # actualizamos los registros
+    MSE <- c(MSE, MSEt[which.min(MSEt)])  
+    orden_predictoras <- c(orden_predictoras, mejor_predictora)
+    
+    df_parcial <- agregar_variable(mejor_predictora, df_parcial, dataframe) # incorporamos permanentemente la mejor predictora a df parcial 
+  }
+  
+  # devolvemos una lista con el orden de incorporacion de las variables y la evolucion del MSE de entrenamiento
+  return(list(orden_predictoras = orden_predictoras, MSE = MSE)) 
+}
+
+seleccion_forward <- function(nombre_respuesta, dataframe, folds){
+  
+  # el orden en el que las variables deben entrar al modelo según su desempeño en el entrenamiento
+  orden <- encontrar_orden_predictoras(nombre_respuesta, dataframe)$orden_predictoras 
+  MSEval <- c()
+  MSEtrain <- c()
+  for (i in 1:length(orden)){ # recorre cada tamaño de modelo posible (desde un modelo con 1 sola var hasta otro con todas las var p)
+    
+    # para cada tamaño i el codigo intentara estimar qué tan bien funcionaria ese modelo con datos nuevos
+    MSEv <- c()
+    MSEt <- c()
+    for (k in 1:length(folds)){  # Para cada tamaño de modelo i, se realiza una validación cruzada para obtener una estimación robusta del error
+      f <- as.formula(paste0(nombre_respuesta," ~ ."))
+      m <- lm(f, data = dataframe[-folds[[k]], c(orden[1:i], nombre_respuesta)])
+      predichos <- predict(m, dataframe[folds[[k]], orden[1:i], drop = F])
+      
+      MSEv <- c(MSEv, calculo_MSE(predichos, dataframe[folds[[k]], nombre_respuesta, drop = TRUE]))
+      MSEt <- c(MSEt, mean(m$residuals**2))
+    }
+
+    MSEval <- c(MSEval, mean(MSEv))
+    MSEtrain <- c(MSEtrain, mean(MSEt))
+  }
+  # identificar cuál es el tamaño i que minimizó el error de validación
+ variables_seleccionadas <- c(orden[1:which.min(MSEval)], nombre_respuesta)
+ return(
+  list(
+      MSEval = MSEval, # El vector con los errores de validación para cada tamaño de modelo.
+      MSEtrain = MSEtrain, # El vector con los errores de entrenamiento para cada tamaño de modelo.
+      orden_predictoras = orden, # La secuencia completa de variables.
+      dataframe = dataframe[, variables_seleccionadas] # El df final reducido, que tiene solo la variable respuesta y las variables seleccionadas que minimizan el error de predicción
+    )
+  )
+}
 ```
 
+```{r rlm_seleccion_variables}
+set.seed(200)
+
+df_predictoras_rlm <- df %>% 
+  select(-Id, -Pais, -price_m2) %>% 
+  mutate(price = price)
+
+rlm_folds <- createFolds(df_predictoras_rlm$price, k = 10)
+
+
+seleccion_predictoras_price <- seleccion_forward("price", df_predictoras_rlm, rlm_folds)
+
+rlm_metricas_predictoras <- data.frame(
+  n_vars = 1:length(seleccion_predictoras_price$MSEval),
+  MSEval = (seleccion_predictoras_price$MSEval)/1e9,
+  MSEtrain = (seleccion_predictoras_price$MSEtrain)/1e9
+) 
+
+kable(rlm_metricas_predictoras, caption = "Comparación de modelos de RLM según cantidad de variables predictoras", col.names = c("Cantidad predictoras", "MSE validación (×10⁹)", "MSE entrenamiento (×10⁹)"), digits = 2, align = "rrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+  kable_styling(latex_options = c("HOLD_position")) %>% 
+  row_spec(0, bold = TRUE)
+```
+
+
+Para determinar la cantidad óptima de variables en el modelo de regresión lineal múltiple, analizamos el MSE de validación obtenido mediante validación cruzada para modelos con 1 a 8 predictoras.
+La curva de MSE muestra una disminución pronunciada entre 1 y 3 variables, seguida de una mejora moderada al incorporar la cuarta. A partir de ese punto, el MSE se estabiliza y las diferencias entre modelos más complejos son marginales (del orden de 0.02 × 10⁹), lo cual resulta irrelevante dada la escala de la variable respuesta.
+Por criterios de parsimonia y estabilidad, seleccionamos el modelo con 4 variables, correspondiente al punto de inflexión (“codo”) de la curva. Este modelo logra un equilibrio adecuado entre capacidad predictiva y complejidad, evitando incorporar predictoras que no aportan mejoras significativas en la generalización.
 
 ```{r}
-rlm_res %>%
-  ggplot(aes(x = Modelo, y = R2_aj, group = 1)) +
-  geom_line(linewidth = 1, color = "#7CAE00") +
-  geom_point(size = 3, color = "#7CAE00", alpha = 0.7) +
-  scale_y_continuous(labels = label_number(accuracy = 0.01)) +
-  labs(title = "R² Ajustado", y = "Valor", x = NULL) +
-  theme_minimal() +
-  tema +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        axis.text.x = element_text(face = "bold"))
-
-rlm_res %>%
-  ggplot(aes(x = Modelo, y = MSE_CV, group = 1)) +
+ggplot(rlm_metricas_predictoras, aes(x = n_vars, y = MSEval)) +
   geom_line(linewidth = 1, color = "#00BFC4") +
-  geom_point(size = 3, color = "#00BFC4", alpha = 0.7) +
-  scale_y_continuous(
-    breaks = breaks_pretty(n = 4),
-    labels = label_number(scale = 1e-6, suffix = "M")
-  ) +
-  labs(title = "MSE (CV)", y = "Valor", x = NULL) +
-  theme_minimal() +
-  tema +
-  theme(plot.title = element_text(face = "bold", hjust = 0.5),
-        axis.text.x = element_text(face = "bold"))
-  
+  geom_point(size = 3, color = "#00BFC4") +
+  labs(title = "Error de validación según cantidad de variables",
+       x = "Número de variables en el modelo",
+       y = "MSE (×10⁹)") +
+  theme_minimal()
 ```
+
+
+```{r rlm_final}
+predictoras_finales_rlm <- seleccion_predictoras_price$orden_predictoras[1:4]
+
+formula_final <- as.formula(
+  paste("price ~", paste(predictoras_finales_rlm, collapse = " + "))
+)
+
+modelo_final <- lm(formula_final, data = df_predictoras_rlm)
+
+```
+
+<!-- Cande: no se si queres graficar algo mas del modelo final, obviamente como son 4 vars predictoras si queres graficar el modelo en si necesitarias un grafico 5d, un monton. Asi que lo unico que se me ocurre es graficar valores reales vs valores predichos pero no se bien como por la escala. Sino tambien hacer un grafico de residuos -->
+```{r}
+df_plot <- data.frame(
+  real = (df_predictoras_rlm$price)/1e9,
+  pred = (predict(modelo_final))/1e9
+)
+
+
+ggplot(df_plot, aes(x = real, y = pred)) +
+  geom_point(alpha = 0.4, color = "steelblue") +
+  geom_smooth(method = "lm") +
+  labs(
+    x = "Precio real (×10³)",
+    y = "Precio predicho (×10³)",
+    title = "Predicción vs valores reales del modelo final"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+
+
+```{r barrios-caros-caba}
+df %>%
+  filter(Region == "Capital Federal") %>%
+  group_by(barrio_localidad) %>%
+  summarise(n = n(), median_price = median(price),
+            median_price_m2 = median(price_m2), .groups = "drop") %>% 
+  filter(n >= 200) %>%
+  arrange(desc(median_price_m2)) %>%
+  head(8) %>%
+  kable(booktabs = TRUE, digits = 0,
+        col.names = c("Barrio", "N", "Mediana del precio [USD]", "Mediana del precio por m² [USD/m²]"),
+        caption = "Barrios de CABA más valorizados por precio del m² cubierto (mín. 200 registros).",
+        align = "lrrr",  position = "!h", format.args = list(big.mark = ","), ) %>%
+  kable_styling(latex_options = c("HOLD_position")) %>%
+  row_spec(0, bold = TRUE)
+
+```
+
+
+Para evitar problemas de memoria y acelerar el cálculo, se utilizó una muestra aleatoria de 10.000 observaciones, suficiente para capturar la estructura general del dataset y obtener una estimación estable del número óptimo de clústeres.
+
+```{r}
+
+datos_caba <- df %>% 
+  filter(Region == "Capital Federal") %>% 
+  select(surface_total, surface_covered, rooms, bedrooms, bathrooms)
+
+# Tomamos una muestra manejable (20.000 filas)
+set.seed(123)
+datos_caba_sample <- datos_caba %>% sample_n(10000)
+
+# Escalamos
+datos_caba_scaled <- as.data.frame(scale(datos_caba_sample[, -(1)]))
+
+# Elbow method para encontrar la cantidad de clusters optima
+fviz_nbclust(datos_caba_scaled, kmeans, method = "wss", k.max = 10) +
+  labs(
+    x = "Número de clústeres (k)",
+    y = "Suma de cuadrados intra-clúster (WSS)",
+    title = "Método del Codo para determinar k óptimo"
+  ) +
+  theme_minimal()
+
+```
+El codo se observa en k = 3, donde la disminución de WSS deja de ser pronunciada. Por encima de ese valor, las mejoras marginales son pequeñas, indicando que 3 clústeres capturan adecuadamente la estructura del conjunto de datos.
+
+```{r}
+kmeans_res <- kmeans(datos_caba_scaled, 3, nstart = 25)  
+kmeans_res
+```
+<!-- Cande: ok esto claramente hay que mejorarlo pero ya esta bastante encaminado -->
+```{r}
+fviz_cluster(kmeans_res, data = datos_caba_scaled, ellipse.type = "euclid")
+```
+
+# Discusiones
+
+# Referencias
+
+# Anexos
+
+
+
+
+
+
+
+
+
 
 
