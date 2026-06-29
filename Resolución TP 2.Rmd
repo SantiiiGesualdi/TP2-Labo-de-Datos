@@ -63,7 +63,7 @@ header-includes:
 
 # Introducción
 
-El mercado inmobiliario es un sector dinámico cuya comprensión resulta fundamental para diversos actores económicos y sociales. En este contexto, el presente informe analiza un conjunto de datos que reúne información sobre precios de viviendas en la Ciudad Autónoma de Buenos Aires (CABA) y el Gran Buenos Aires correspondiente al año 2020. Los datos analizados provienen de la plataforma Kaggle (Properati Data) y han sido adaptados con fines didácticos para este estudio.
+El mercado inmobiliario es un sector dinámico cuya comprensión resulta fundamental para diversos actores económicos y sociales. En este contexto, el presente informe analiza un conjunto de datos que reúne información sobre precios de viviendas en la Ciudad Autónoma de Buenos Aires (CABA) y el Gran Buenos Aires correspondiente al año 2020. Los datos analizados provienen de la plataforma Kaggle (Properati Data), "Buenos Aires Real State on sale"[@properati] y han sido adaptados con fines didácticos para este estudio.
 La importancia de abordar este análisis radica en la necesidad de identificar qué factores, ya sean características edilicias (como superficie, cantidad de ambientes o baños) o localización geográfica, inciden de manera determinante en la valoración de una propiedad. Comprender estas relaciones es clave para interpretar el funcionamiento del mercado, detectar patrones de comportamiento y aportar evidencia que permita tomar decisiones informadas en contextos de compra, venta o planificación urbana.
 Además, el mercado inmobiliario presenta una marcada heterogeneidad, propiedades con configuraciones similares pueden exhibir precios muy distintos según su ubicación, distribución interna o condiciones edilicias. Esta variabilidad hace que el análisis estadístico y el modelado predictiva resulten herramientas especialmente valiosas para estudiar esta dinámica. En este trabajo se emplean métodos de regresión lineal simple y múltiple para evaluar la capacidad de distintas variables de explicar el precio de las viviendas, así como técnicas de agrupamiento para identificar conjuntos de propiedades con características estructurales comparables dentro de la región de Capital Federal.
 El problema central que busca resolver este trabajo es la identificación de patrones y relaciones entre las variables físicas de las viviendas y su valor de mercado, así como la agrupación de las propiedades en conjuntos con características homogéneas. En función de ello, el objetivo principal del informe es evaluar la capacidad predictiva de distintos modelos y caracterizar los grupos resultantes, aportando una visión integral del comportamiento del mercado inmobiliario en el área analizada.
@@ -751,8 +751,14 @@ set.seed(123)
 datos_caba_sample <- datos_caba %>% sample_n(10000)
 
 # Escalamos
-datos_caba_scaled <- as.data.frame(scale(datos_caba_sample[, -(1)]))
+datos_caba_scaled <- as.data.frame(scale(datos_caba_sample))
 
+summary(datos_caba_scaled) 
+```
+
+<!-- Cande: hay que ver tema outliers xq kmeans es extremadamente sensible a esos, capaz si eliminamos fuera del cuartil 3 y por debajo del cuartil 1? -->
+
+```{r}
 # Elbow method para encontrar la cantidad de clusters optima
 fviz_nbclust(datos_caba_scaled, kmeans, method = "wss", k.max = 10) +
   labs(
@@ -763,7 +769,11 @@ fviz_nbclust(datos_caba_scaled, kmeans, method = "wss", k.max = 10) +
   theme_minimal()
 
 ```
+
+
 El codo se observa en k = 3, donde la disminución de WSS deja de ser pronunciada. Por encima de ese valor, las mejoras marginales son pequeñas, indicando que 3 clústeres capturan adecuadamente la estructura del conjunto de datos.
+
+
 
 ```{r}
 kmeans_res <- kmeans(datos_caba_scaled, 3, nstart = 25)  
@@ -777,6 +787,9 @@ fviz_cluster(kmeans_res, data = datos_caba_scaled, ellipse.type = "euclid")
 # Discusiones
 
 # Referencias
+
+\printbibliography[heading=none]
+\renewcommand{\printbibliography}[1][]{}
 
 # Anexos
 
