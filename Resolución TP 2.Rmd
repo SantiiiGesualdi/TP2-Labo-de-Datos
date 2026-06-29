@@ -106,10 +106,8 @@ paleta <- "Set2"
 ```{r import_datos}
 datos_raw <- read.csv("datosTP2_2026.csv", na.strings = c("NA", ""), stringsAsFactors = TRUE)
 
-datos <- datos_raw
+datos <- datos_raw %>% 
 ```
-
-
 
 ```{r descripcion_numericas}
 
@@ -126,10 +124,26 @@ tabla_numericas <- datos %>%
     minimo = min(valor, na.rm = TRUE),
     maximo = max(valor, na.rm = TRUE),
     nas = sum(is.na(valor))
-  )
+  ) %>% 
+  as.data.frame()
 
-
-kable(tabla_numericas, caption = "Estadísticos descriptivos de las variables númericas", col.names = c("Variable", "Media", "Mediana", "Desvío estándar", "Mínimo", "Máximo", "Datos Faltantes"), digits = 2, align = "lrrrrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+tabla_numericas %>% 
+   mutate(variable = case_when(
+    variable == "bathrooms" ~ "Baños",
+    variable == "barrio_localidad" ~ "Barrio/Localidad",
+    variable == "surface_covered" ~ "Superficie cubierta",
+    variable == "property_type" ~ "Tipo de propiedad",
+    variable == "price" ~ "Precio",
+    variable == "surface_total" ~ "Superficie total",
+    variable == "rooms" ~ "Ambientes",
+    variable == "bedrooms" ~ "Dormitorios",
+    variable == "region" ~ "Región",
+    TRUE ~ variable
+  )) %>% 
+  kable(caption = "Estadísticos descriptivos de las variables númericas",
+        col.names = c("Variable", "Media", "Mediana", "Desvío estándar", "Mínimo", "Máximo", "Datos Faltantes"), 
+        digits = 2, align = "lrrrrrr", table.envir = "table", 
+        position = "!h", format.args = list(big.mark = ",")) %>% 
   kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
 
@@ -140,6 +154,7 @@ kable(tabla_numericas, caption = "Estadísticos descriptivos de las variables n�
 ```{r descripcion_categoricas}
 tabla_categoricas <- datos %>%
   select(where(is.factor), -Pais, -barrio_localidad) %>%
+  mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
   pivot_longer(cols = everything(), 
                names_to = "variable", 
                values_to = "categoria") %>%
@@ -157,10 +172,13 @@ tabla_categoricas <- datos %>%
   ungroup() %>%
   select(variable, categoria, frec_abs, frec_rel, cantidad_nas) %>% 
   
-  mutate(variable = recode(variable, "property_type" = "Tipo de propiedad"))
+  mutate(variable = recode(variable, "property_type" = "Tipo de propiedad")) %>% 
+  
+  as.data.frame()
   
 
-kable(tabla_categoricas, caption = "Distribución de frecuencias de las variables categóricas principales", col.names = c("Variable", "Categoria", "Frecuencia absoluta", "Frecuencia relativa", "Datos faltantes"), digits = 2, align = "llrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+tabla_categoricas %>%
+kable(caption = "Distribución de frecuencias de las variables categóricas principales", col.names = c("Variable", "Categoria", "Frecuencia absoluta", "Frecuencia relativa", "Datos faltantes"), digits = 2, align = "llrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
   kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
 ```
@@ -219,14 +237,14 @@ df_mod <- df %>%
 
 ```{r surface_dist, fig.cap = "Distribución de la superficie cubierta de las propiedades (escala logarítmica).", fig.subcap = c("Conjunto completo, con colas largas.", "Tras recortar el percentil 99 superior."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
 ggplot(df, aes(x = surface_covered)) +
-  geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
+  geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.7) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Superficie cuebierta [m²]", y = "Cantidad de propiedades [u.a.]") +
   tema
 
 # Se encuentran colas muy largas, se prefirió cortar por el 0.01 mayor perctil 
 ggplot(df_mod, aes(x = surface_covered)) +
-  geom_histogram(bins = 40, fill = "#fc8d62", alpha = 0.8) +
+  geom_histogram(bins = 40, fill = "#fc8d62", alpha = 0.7) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Superficie Cubierta [m²]", y = "Cantidad de propiedades [u.a]") +
   tema
@@ -270,13 +288,13 @@ for(col in colnames(datos_numeric)){
 
 ```{r price_dist, fig.cap = "Distribución del precio de venta de las propiedades.", fig.subcap = c("Escala lineal.", "Escala logarítmica."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
 ggplot(df_mod, aes(x = price)) +
-  geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
+  geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.7) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
   tema
 
 ggplot(df_mod, aes(x = price)) +
-  geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.8) +
+  geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.7) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
   labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
   tema
@@ -285,6 +303,7 @@ ggplot(df_mod, aes(x = price)) +
 ```{r analisis_barrios}
 df_barrios <- df %>%
   filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste|Capital Federal")) %>%
+  mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
   group_by(Region, barrio_localidad) %>%
   summarise(median_price_m2 = median(price_m2),
             q1_price_m2     = quantile(price_m2, 0.25), 
@@ -317,7 +336,6 @@ df_barrios %>%
   group_by(Region) %>%
   filter(Region != "Capital Federal") %>% 
   ungroup()  %>% 
-  mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
   ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
                          y = median_price_m2, fill = Region)) +
   geom_col(alpha = 0.7,show.legend = FALSE) +
@@ -348,7 +366,9 @@ ggplot(df_mod, aes(x = property_type, y = price, fill = property_type)) +
   tema + theme(legend.position = "none") +
   scale_fill_brewer(palette = paleta)
 
-ggplot(df_mod, aes(x = reorder(Region, price, median), y = price, fill = Region)) +
+df_mod %>% 
+      mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
+  ggplot(aes(x = reorder(Region, price, median), y = price, fill = Region)) +
   geom_boxplot(alpha = 0.7, outlier.alpha = 0.05) +
   coord_flip() +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
@@ -434,10 +454,11 @@ Si bien la variable bathrooms es la que menos RMSE presenta, al ser discreta y n
 
 
 
-<!-- No se muestra este ajsute. Solo menciona que fue tenido en cuenta -->
+<!-- No se muestra este ajuste. Solo menciona que fue tenido en cuenta -->
 
 ```{r rls_bathrooms}
 rls_bathrooms <- lm(price ~ bathrooms, df_mod)
+
 coefs <- summary(rls_bathrooms)$coefficients
 b0 <- coefs[1,1]
 b1 <- coefs[2,1]
@@ -467,7 +488,7 @@ r2_sc <- summary(rls_surface)$adj.r.squared
 
 ```{r rls_surface_plot, fig.cap = "Regresión lineal simple del precio sobre la superficie cubierta (muestra aleatoria de 15.000 propiedades).", fig.subcap = c("Recta ajustada sobre los datos.", "Residuos frente a la superficie cubierta."), fig.ncol = 2, out.width = "48%", fig.height = 3.3}
 set.seed(200)
-muestra <- df_mod %>% slice_sample(n = 15000)
+muestra <- df_mod %>% slice_sample(n = 1000)
 
 ggplot(muestra, aes(x = surface_covered, y = price)) +
   geom_point(color = "#66c2a5", size = 1.2, alpha = 0.4) +
@@ -615,7 +636,7 @@ rlm_metricas_predictoras <- rlm_metricas_predictoras %>%
   )) %>% 
   mutate(predictoras = if_else(row_number() == 1, 
                                predictoras, 
-                               paste0("+ ", predictoras)))
+                               glue("+ {predictoras}")))
 
 rlm_metricas_predictoras %>% 
   select(-n_vars) %>% 
@@ -632,9 +653,8 @@ Por criterios de parsimonia y estabilidad, seleccionamos el modelo con 4 variabl
 ```{r rlm_codo, fig.cap = "Error cuadrático medio de validación cruzada según el número de variables incluidas en el modelo de RLM.", fig.height = 3.2, out.width = "75%"}
 ggplot(rlm_metricas_predictoras, aes(x = n_vars, y = MSEval)) +
   geom_line(linewidth = 1, color = "#00BFC4") +
-  geom_point(size = 3, color = "#00BFC4", alpha=0.) +
-  labs(title = "Error de validación según cantidad de variables",
-       x = "Número de variables en el modelo",
+  geom_point(size = 3, color = "#00BFC4", alpha=0.7) +
+  labs(x = "Número de variables en el modelo",
        y = "MSE (×10⁹)") +
   theme_minimal()
 ```
@@ -653,21 +673,22 @@ modelo_final <- lm(formula_final, data = df_predictoras_rlm)
 
 ```{r rlm_pred, fig.cap = "Precios predichos por el modelo final de RLM frente a los precios reales observados.", fig.height = 3.4, out.width = "95%"}
 df_plot <- data.frame(
-  real = (df_predictoras_rlm$price)/1e9,
-  pred = (predict(modelo_final))/1e9
+  real = (df_predictoras_rlm$price)/1e3,
+  pred = (predict(modelo_final))/1e3
 )
 
+set.seed(200)
+muestra <- df_plot %>% slice_sample(n = 2000)
 
-ggplot(df_plot, aes(x = real, y = pred)) +
+
+ggplot(muestra, aes(x = real, y = pred)) +
   geom_point(alpha = 0.4, color = "#00BFC4") +
-  geom_smooth(method = "lm", color = "#fc8d62",se = F) +
+  geom_abline(intercept = 0, slope=1) + 
   labs(
     x = "Precio real (×10³)",
-    y = "Precio predicho (×10³)",
-    title = "Predicción vs valores reales del modelo final"
-  ) +
-  theme_minimal()
-
+    y = "Precio predicho (×10³)"
+    ) +
+  tema
 ```
 
 
@@ -710,7 +731,7 @@ caba %>%
 
 ```
 
-```{r boxplots_atipicos,include=FALSE}
+```{r boxplots_atipicos}
 
 for(col in colnames(caba_scaled)){
  boxplot <- ggplot(caba_scaled, aes(y = .data[[col]])) +
@@ -793,9 +814,9 @@ perfil %>%
   select(Segmento, N, sup_cubierta, ambientes, dormitorios, baños, precio_mediano) %>%
   kable(booktabs = TRUE, digits = c(0,0,2,1,1,1,0),
         col.names = c("Segmento","N","Sup. cub. (m²)","Ambientes","Dormit.","Baños","Precio mediano [USD]"),
-        caption = "Caracterización de los 3 segmentos de viviendas de CABA (k-means).",
+        caption = "Estadísticas de los 3 segmentos categorizados de viviendas en CABA (k-means).",
         align = "lrrrrrr", format.args = list(big.mark = ",")) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
+  kable_styling(latex_options = c("HOLD_position")) %>%
   row_spec(0, bold = TRUE)
 ```
 
