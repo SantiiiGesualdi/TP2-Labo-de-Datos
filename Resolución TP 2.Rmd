@@ -329,6 +329,7 @@ df_barrios <- df %>%
             std_price_m2    = sd(price_m2),.groups = 'drop')
 
 ```
+
 ```{r densidadesXregion}
 ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
   geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE, show.legend = FALSE) +
@@ -684,6 +685,9 @@ ggplot(rlm_metricas_predictoras, aes(x = n_vars, y = MSEval)) +
 ```
 
 
+
+
+
 ```{r rlm_final}
 predictoras_finales_rlm <- seleccion_predictoras_price$orden_predictoras[1:4]
 
@@ -693,7 +697,7 @@ formula_final <- as.formula(
 
 modelo_final <- lm(formula_final, data = df_predictoras_rlm)
 
-```
+
 
 <!-- Cande: no se si queres graficar algo mas del modelo final, obviamente como son 4 vars predictoras si queres graficar el modelo en si necesitarias un grafico 5d, un monton. Asi que lo unico que se me ocurre es graficar valores reales vs valores predichos pero no se bien como por la escala. Sino tambien hacer un grafico de residuos -->
 ```{r}
