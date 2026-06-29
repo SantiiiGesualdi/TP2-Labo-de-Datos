@@ -180,7 +180,7 @@ df <- df %>%
 n_obs_final <- nrow(df)
 ```
 
-```{r dist_precio}
+```{r dist_surface}
 ggplot(df, aes(x = surface_total)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
@@ -239,7 +239,7 @@ bind_rows(t_region, t_tipo) %>%
 ```
 
 
-```{r}
+```{r tabla_numerica}
 resumen_num(df, c("price","surface_total","surface_covered",
                      "rooms","bedrooms","bathrooms","price_m2")) %>%
   kable(booktabs = TRUE, digits = 1,
@@ -251,7 +251,7 @@ resumen_num(df, c("price","surface_total","surface_covered",
 ```
 
 
-```{r dist_precio}
+```{r dist_price}
 ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.8) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
@@ -306,8 +306,7 @@ df %>%
 ```
 
 ```{r barrios-caros-caba}
-# <!-- Santi: Creo que es interesante ver si hay mucha diferencia Zona Sur| Zona Norte
-#             El violín acá viene barbaro para ver la diferencia en densidad-->
+
 
 df_barrios <- df %>%
   filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste|Capital Federal")) %>%
@@ -374,7 +373,7 @@ df_barrios %>%
 preds_rls <- c("surface_covered","bathrooms","rooms","bedrooms","surface_total")
 
 rls_tab <- map_dfr(preds_rls, function(v){
-  m <- lm(reformulate(v, "price"), data = df_mod)
+  m <- lm(reformulate(v, "price"),data = df_mod)
   tibble(Predictor = v,
          R2 = summary(m)$r.squared,
          RMSE = sqrt(mean(resid(m)^2)))
@@ -456,62 +455,106 @@ ggplot(muestra, aes(x = surface_covered, y = residuo)) +
 ```
 
 
-<!-- Santi: El ajuste no esta mal pero parece haber mucha palanca, se puede probar de sacarla
-            se puede usar la matriz hat (sombrero ¿?) despues te cuento y me decis que opinas -->
-            
+<!-- Santi: Acá se ve lo de los pesos -->
 
-```{r rlm-comp}
-set.seed(200)
-# Partición 80/20 
+```{r}
+agregar_variable <- function(nueva_predictora, df0, df) {
+  df0[,nueva_predictora] <- df[,nueva_predictora]
+  return(df0)
+}
+
+evaluar_predictora <- function(predictora, df0, df, variable_respuesta){
+  df_parcial <- agregar_variable(predictora, df0, df)
+  f <- as.formula(paste0(variable_respuesta, "~ ."))
+  modelo <- lm(f, data = df_parcial)
+  mse <- mean(modelo$residuals**2)
+  resultados <- list(df_nuevo = df_parcial, MSE = mse)
+  return(resultados)
+}
+
+encontrar_orden_predictoras <- function(nombre_respuesta, df){
+  
+  orden_predictoras <- c()
+  MSE <- c()
+  df_parcial <- df[, nombre_respuesta, drop = F]
+  
+  while (dim(df_parcial)[2] != dim(df)[2]){
+    
+    MSEt <- c()
+    columnas_evaluadas <- c()
+    
+    for(col in names(df)){
+      
+      if (!(col %in% names(df_parcial))){
+        columnas_evaluadas <- c(columnas_evaluadas, col)
+        MSEt <- c(
+          MSEt,
+          evaluar_predictora(col, df_parcial, df, nombre_respuesta)$MSE
+        )
+      }
+      
+    }
+    mejor_predictora <- columnas_evaluadas[which.min(MSEt)]
+    
+    MSE <- c(MSE, MSEt[which.min(MSEt)])
+    orden_predictoras <- c(orden_predictoras, mejor_predictora)
+    
+    df_parcial <- agregar_variable(mejor_predictora, df_parcial, df)
+  }
+  
+  return(
+    list(
+      orden_predictoras = orden_predictoras,
+      MSE = MSE
+    )
+  )
+}
+
+
+seleccion_forward <- function(nombre_respuesta, df, folds){
+  
+  orden <- encontrar_orden_predictoras(nombre_respuesta, df)$orden_predictoras
+  MSE <- c()
+  for (i in 1:length(orden)){
+    MSEv <- c()
+    for (k in 1:length(folds)){
+      f <- as.formula(paste0(nombre_respuesta," ~ ."))
+      m <- lm(f, data = df[-folds[[k]], c(orden[1:i], nombre_respuesta)])
+      predichos <- predict(m, df[folds[[k]], orden[1:i], drop = F])
+      MSEv <- c(MSEv, calculo_MSE(predichos, df[folds[[k]], nombre_respuesta]))
+    }
+    MSE <- c(MSE, mean(MSEv))
+  }
+  variables_seleccionadas <- c(orden[1:which.min(MSE)], nombre_respuesta)
+  return(
+    list(
+      MSE = MSE,
+      orden_predictoras = orden,
+      df = df[, variables_seleccionadas]
+    )
+  )
+}
+```
+  
+
+```{r}
+
 idx <- createDataPartition(df_mod$price, p = 0.8, list = FALSE)
 train <- df_mod[idx, ]
 test <- df_mod[-idx, ]
 
-modelos <- tribble(
-  ~id,  ~formula,                                                              ~desc,
-  "M1", "price ~ surface_covered",                                            "Superficie cubierta",
-  "M2", "price ~ surface_covered + bathrooms",                               "+ baños",
-  "M3", "price ~ surface_covered + bathrooms + rooms",                       "+ ambientes",
-  "M4", "price ~ surface_covered + bathrooms + rooms + property_type",       "+ tipo",
-  "M5", "price ~ surface_covered + bathrooms + rooms + property_type + Region", "+ región",
-  "M6", "price ~ surface_covered * property_type + bathrooms + rooms + Region", "+ interacción sup X tipo"
-)
+K <- 5
+folds <- createFolds(train$n, k = K)
+MSEs <- numeric(20)
 
-# <!-- Cande: a partir de aca me tarda bastante en correr, eso es raro (mi compu es bastante rapida porque es nuevita). Creo que debe ser por algo del orden y la sintaxis correcta, despues chequeo bien las diapos para recordar como era
+df_mod <- df_mod %>% 
+  get_dummies(cols = localization,
+              drop_first = TRUE ) %>%
+  select (!localization ) %>%
+  as.data.frame()
 
-rlm_res <- pmap_dfr(modelos, function(id, formula, desc){
-  f <- as.formula(formula)
-  
-  g <- glm(f, data = train)
-  modelo_lm <- lm(f, data = train)
-  k_params <- length(coef(g))
-  cv <- cv.glm(train, g, K = 10)$delta[1]
-  pred <- predict(g, test)
-  test_mse <- mean((test$price - pred)^2)
-  adj <- summary(modelo_lm)$adj.r.squared
-  tibble(
-    Modelo = id, 
-    Predictores = desc,
-    Parametros = k_params,
-    R2_aj = adj, 
-    MSE_CV = cv, 
-    MSE_Test = test_mse
-  )
-})
-
-rlm_res %>%
-  mutate(across(c(MSE_CV, MSE_Test), ~ .x / 1e9)) %>%
-  kable(
-    booktabs = TRUE, 
-    digits = c(0, 0, 0, 3, 2, 2), 
-    col.names = c("Modelo", "Predictores (acumulados)", "Parámetros", "R² aj.", "MSE Train (×10⁹)", "MSE Test (×10⁹)"),
-    caption = "Comparación de modelos de RLM por validación cruzada (10 folds)",
-    align = "llcrrr" #
-  ) %>%
-  kable_styling(latex_options = c("HOLD_position"), font_size = 9) %>%
-  row_spec(0, bold = TRUE) %>%
-  row_spec(6, bold = TRUE) 
 ```
+
 
 
 ```{r}
