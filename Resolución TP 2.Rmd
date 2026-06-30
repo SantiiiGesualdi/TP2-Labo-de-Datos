@@ -102,7 +102,7 @@ datos <- datos_raw
 
 El presente estudio utilizó como insumo principal una base de datos relativa al mercado inmobiliario de la Ciudad Autónoma de Buenos Aires y el Gran Buenos Aires, proveniente de la plataforma Kaggle[@properati]. El flujo de trabajo se estructuró en tres etapas principales, preprocesamiento del dataset, modelado predictivo mediante regresión lineal y agrupamiento no supervisado (este último aplicado únicamente a viviendas de Capital Federal) y comunicación, siguiendo el ciclo de vida de un proyecto de ciencia de datos robusto (*[@zumel2020]*). Todas las tareas se realizaron en R[@R-base], desde la depuración de los datos hasta el modelado y la comunicación de resultados.
 
-En las *Tabla \@ref(tab:descripcion-numericas)* y *Tabla \@ref(tab:tabla-categoricas)* se puede ver una descripción estadística de las variables del dataset original. 
+En las *Tabla \@ref(tab:descripcion-numericas)* y *Tabla \@ref(tab:descripcion-categoricas)* se puede ver una descripción estadística de las variables del dataset original. 
 
 ```{r descripcion-numericas}
 tabla_numericas <- datos %>%
@@ -492,12 +492,14 @@ resumen_metricas <- resumen_metricas %>%
                            "surface_covered" = "Superficie cubierta",
                            "rooms" = "Ambientes",
                            "bedrooms" = "Dormitorios")) %>% 
+  mutate(mse_promedio = mse_promedio/1e9,
+         rmse_promedio = rmse_promedio/1e4) %>% 
   rename(`Predictora` = variable,
          `r$^2$` = r2_promedio,
-         `MSE` = mse_promedio,
-         `RMSE` = rmse_promedio)
+         `MSE (x10$^9$)` = mse_promedio,
+         `RMSE (x10$^4$) [USD]` = rmse_promedio)
 
-kable(resumen_metricas, caption = "Modelos de RLS ordenados por capacidad explicativa", digits = 2, align = "lrrr", format.args = list(big.mark = ","), escape = FALSE, booktabs = TRUE) %>% 
+kable(resumen_metricas, caption = "Modelos de RLS ordenados por capacidad explicativa.", digits = 2, align = "lrrr", format.args = list(big.mark = ","), escape = FALSE, booktabs = TRUE) %>% 
   kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
 
@@ -513,7 +515,7 @@ Si bien la variable bathrooms es la que menos RMSE presenta, al ser discreta y n
 
 
 
-```{r rls-bathrooms, results = "hide"}
+```{r rls-bathrooms, fig.show = "hide"}
 rls_bathrooms <- lm(price ~ bathrooms, df_mod)
 
 coefs <- summary(rls_bathrooms)$coefficients
@@ -944,6 +946,8 @@ El ancho de silueta promedio es moderado y positivo, lo que confirma que los cua
 
 # Anexos
 
+## Anexo I: Datos faltantes
+
 ```{r tablita-na}
 datos_raw %>%
   summarise(across(everything(), ~ mean(is.na(.)))) %>%
@@ -959,7 +963,7 @@ datos_raw %>%
   tema
 
 ```
-
+## Anexo II: Variación intra e inter clusters
 
 
 ```{r cluster-distancias, fig.cap = "Matriz de distancias en el espacio estandarizado (superficie cubierta, ambientes, dormitorios y baños). La diagonal (recuadrada) mide la cohesión intra-clúster como distancia media de las propiedades a su centroide; fuera de la diagonal, la separación inter-clúster entre centroides. Valores bajos en la diagonal y altos fuera de ella indican grupos compactos y bien separados.", fig.height = 3.4, out.height = "7.5cm"}
