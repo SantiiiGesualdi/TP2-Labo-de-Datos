@@ -85,6 +85,8 @@ options(kableExtra.latex.load_packages = FALSE)
 library(kableExtra)
 library(corrplot)
 
+library(paletteer)
+
 
 # Tema y paleta
 
@@ -180,7 +182,7 @@ tabla_categoricas %>%
   kable_styling(latex_options = c("HOLD_position")) %>%
   row_spec(0, bold = TRUE) %>%
   pack_rows(index = index_grupos, bold = TRUE,
-            latex_align = "l", hline_after = TRUE,
+            latex_align = "l", hline_after = TRUE, hline_before = TRUE,
             label_row_css = "text-align: left; 
             border-bottom: 1px solid; border-top: 1px solid")
 ```
@@ -351,20 +353,51 @@ ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
 ```
 
 ```{r precioXbarrio, fig.cap = "Precio mediano por $m^{2}$ por barrio o localidad del Gran Buenos Aires, segmentado por zona. Las barras representan el rango intercuartílico.", fig.height = 5.5, out.width = "95%"}
+
+paleta_completa <- paletteer_d("RColorBrewer::Set2")
+
 df_barrios %>%
   group_by(Region) %>%
-  filter(Region != "Capital Federal") %>% 
+  filter(str_detect(Region, "Zona Norte|Capital Federal")) %>% 
+  slice_head(n = 10) %>% 
   ungroup()  %>% 
   ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
-                         y = median_price_m2, fill = Region)) +
-  geom_col(alpha = 0.7,show.legend = FALSE) +
+                         y = median_price_m2, fill = Region, color = Region)) + # Añadido color aquí para las errorbars
+  geom_col(alpha = 0.7, show.legend = FALSE) +
   coord_flip()+
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
   geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
-                    ymax = median_price_m2 + q3_price_m2), width = 0.3)   +
+                    ymax = median_price_m2 + q3_price_m2), width = 0.3,
+                show.legend = FALSE, color="black")   +
   facet_wrap(~Region, scales = "free_y")+
-  scale_fill_brewer(palette = paleta) +
-  scale_color_brewer(palette = paleta) +
+  scale_fill_manual(values = paleta_completa[1:2]) +
+  scale_color_manual(values = paleta_completa[1:2]) +
+  labs(x = NULL, 
+       y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
+  tema +
+  theme(
+    strip.text = element_text(face = "bold"),      
+    axis.title.x = element_text(face = "bold"),   
+    axis.text.y = element_text(face = "bold") 
+  )
+
+
+df_barrios %>%
+  group_by(Region) %>%
+  filter(str_detect(Region, "Zona Sur|Zona Oeste")) %>% 
+  slice_head(n = 10) %>% 
+  ungroup()  %>% 
+  ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
+                         y = median_price_m2, fill = Region, color = Region)) + # Añadido color aquí para las errorbars
+  geom_col(alpha = 0.7, show.legend = FALSE) +
+  coord_flip()+
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
+                    ymax = median_price_m2 + q3_price_m2), width = 0.3,
+                show.legend = FALSE, color="black")   +
+  facet_wrap(~Region, scales = "free_y")+
+  scale_fill_manual(values = paleta_completa[3:4]) +
+  scale_color_manual(values = paleta_completa[3:4]) +
   labs(x = NULL, 
        y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
   tema +
