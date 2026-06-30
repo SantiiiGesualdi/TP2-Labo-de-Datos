@@ -21,13 +21,15 @@ classoption: titlepage
 bibliography: referencias.bib
 biblio-style: apa
 link-citations: true
-lang: es
+lang: es-AR
 geometry: "margin=2.5cm"
 mainfont: "Times New Roman"
 fontsize: 11pt
 linestretch: 1.5
 
 header-includes:
+  - \AtBeginDocument{\renewcommand{\tablename}{Tabla}}
+  
   - \usepackage{float}
   
   - \usepackage{titlesec}
@@ -48,17 +50,6 @@ header-includes:
 
 
 
-<!-- comentarios/tips a tener en cuenta: -->
-<!-- - Para la descripcion de base de datos en metodologia podemos hacer una tabla descriptiva de las variables (por ej vars continuas: media y rango, vars categoricas: porcentajes). Normalmente es la "tabla 1" de TODOS los informes de analisis de datos, hasta hay paquetes/librerias con funciones que las hacen, una es "arsenal". En esa misma tabla debe estar la informacion sobre datos faltantes. -->
-<!-- - Para regresion lineal simple es una buena practica hacer una tabla con los estimadores (R2, etc). A veces no es necesario mostrarla pero sí es algo bueno hacerla para tener una idea de como va el modelo. -->
-<!--  - Graficos con facetas tambien es buena idea si mostras varios tipos de regresion o por ej en polinomial y mostras varios grados de un mismo polinomio.  -->
-<!--  - No es necesario mostrar TODOS los graficos y tablas creados, pero sí es necesario incluirlo en el codigo. -->
-<!--  - MUCHO CUIDADO con sobre ajustar (hizo mucho enfasis en esto, como que era una trampa en uno de los ejercicios) -->
-<!--  - Todas las desiciones tomadas deben estar fundamentadas -->
-<!--  - Buena practica incluir alcances y ventajas (si las hay) en el parrafo de limitaciones -->
-<!--  - Evaluar muy a detalle qué metrica conviene usar para evaluar la capacidad predivtiva de los modelos. Mas que nada en la parte que involucra la variable del precio (que son miles de dolares). (pista sobre esto: tiene que ver con arboles) -->
-
-
 \newpage
 
 # Introducción
@@ -67,6 +58,8 @@ El mercado inmobiliario es un sector dinámico cuya comprensión resulta fundame
 La importancia de abordar este análisis radica en la necesidad de identificar qué factores, ya sean características edilicias (como superficie, cantidad de ambientes o baños) o localización geográfica, inciden de manera determinante en la valoración de una propiedad. Comprender estas relaciones es clave para interpretar el funcionamiento del mercado, detectar patrones de comportamiento y aportar evidencia que permita tomar decisiones informadas en contextos de compra, venta o planificación urbana.
 Además, el mercado inmobiliario presenta una marcada heterogeneidad, propiedades con configuraciones similares pueden exhibir precios muy distintos según su ubicación, distribución interna o condiciones edilicias. Esta variabilidad hace que el análisis estadístico y el modelado predictiva resulten herramientas especialmente valiosas para estudiar esta dinámica. En este trabajo se emplean métodos de regresión lineal simple y múltiple para evaluar la capacidad de distintas variables de explicar el precio de las viviendas, así como técnicas de agrupamiento para identificar conjuntos de propiedades con características estructurales comparables dentro de la región de Capital Federal.
 El problema central que busca resolver este trabajo es la identificación de patrones y relaciones entre las variables físicas de las viviendas y su valor de mercado, así como la agrupación de las propiedades en conjuntos con características homogéneas. En función de ello, el objetivo principal del informe es evaluar la capacidad predictiva de distintos modelos y caracterizar los grupos resultantes, aportando una visión integral del comportamiento del mercado inmobiliario en el área analizada.
+
+\newpage
 
 # Metodología
 
@@ -77,6 +70,9 @@ options(scipen = 999)
 library(tidyverse)
 library(dplyr)
 library(glue)
+library(caret)
+library(boot)
+library(factoextra)
 
 
 library(ggplot2)
@@ -87,13 +83,7 @@ library(scales)
 library(knitr)
 options(kableExtra.latex.load_packages = FALSE) 
 library(kableExtra)
-library(paletteer)
-
 library(corrplot)
-library(caret)
-
-library(boot)
-library(factoextra)
 
 
 # Tema y paleta
@@ -102,14 +92,17 @@ tema <- theme_minimal(base_size = 11)
 paleta <- "Set2"
 ```
 
-
-```{r import_datos}
+```{r import-datos}
 datos_raw <- read.csv("datosTP2_2026.csv", na.strings = c("NA", ""), stringsAsFactors = TRUE)
 
 datos <- datos_raw
 ```
 
-```{r descripcion_numericas}
+El presente estudio utilizó como insumo principal una base de datos relativa al mercado inmobiliario de la Ciudad Autónoma de Buenos Aires y el Gran Buenos Aires, proveniente de la plataforma Kaggle[@properati]. El flujo de trabajo se estructuró en tres etapas principales, preprocesamiento del dataset, modelado predictivo mediante regresión lineal y agrupamiento no supervisado (este último aplicado únicamente a viviendas de Capital Federal) y comunicación, siguiendo el ciclo de vida de un proyecto de ciencia de datos robusto (*[@zumel2020]*). Todas las tareas se realizaron en R[@R-base], desde la depuración de los datos hasta el modelado y la comunicación de resultados.
+
+En las *Tabla \@ref(tab:descripcion-numericas)* y *Tabla \@ref(tab:tabla-categoricas)* se puede ver una descripción estadística de las variables del dataset original. 
+
+```{r descripcion-numericas}
 tabla_numericas <- datos %>%
   select(where(is.numeric), -Id) %>%
   pivot_longer(cols = everything(), 
@@ -127,29 +120,26 @@ tabla_numericas <- datos %>%
   as.data.frame()
 
 tabla_numericas %>% 
-   mutate(variable = case_when(
-    variable == "bathrooms" ~ "Baños",
-    variable == "barrio_localidad" ~ "Barrio/Localidad",
-    variable == "surface_covered" ~ "Superficie cubierta",
-    variable == "property_type" ~ "Tipo de propiedad",
-    variable == "price" ~ "Precio",
-    variable == "surface_total" ~ "Superficie total",
-    variable == "rooms" ~ "Ambientes",
-    variable == "bedrooms" ~ "Dormitorios",
-    variable == "region" ~ "Región",
-    TRUE ~ variable
-  )) %>% 
+   mutate(variable = recode(variable,
+                            "bathrooms" = "Baños",
+                            "barrio_localidad" = "Barrio/Localidad",
+                            "surface_covered" = "Superficie cubierta",
+                            "property_type" = "Tipo de propiedad",
+                            "price" = "Precio",
+                            "surface_total" = "Superficie total",
+                            "rooms" = "Ambientes",
+                            "bedrooms" = "Dormitorios",
+                            "region" = "Región")) %>% 
   kable(caption = "Estadísticos descriptivos de las variables númericas",
         col.names = c("Variable", "Media", "Mediana", "Desvío estándar", "Mínimo", "Máximo", "Datos Faltantes"), 
-        digits = 2, align = "lrrrrrr", table.envir = "table", 
-        position = "!h", format.args = list(big.mark = ",")) %>% 
+        digits = 2, align = "lrrrrrr", format.args = list(big.mark = ","), escape = FALSE, booktabs = TRUE) %>% 
   kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
 
 ```
 
 
-```{r descripcion_categoricas}
+```{r descripcion-categoricas}
 tabla_categoricas <- datos %>%
   select(where(is.factor), -Pais, -barrio_localidad) %>%
   mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
@@ -186,20 +176,19 @@ tabla_categoricas %>%
   kable(caption = "Distribución de frecuencias de las variables categóricas principales",
         col.names = c("Categoría", "Frecuencia absoluta", "Frecuencia relativa",
                       "Datos faltantes"), 
-        digits = 2, align = "lrrr", table.envir = "table", 
-        position = "!h", format.args = list(big.mark = ",")) %>%
+        digits = 2, align = "lrrr", format.args = list(big.mark = ","), escape = FALSE, booktabs = TRUE) %>%
   kable_styling(latex_options = c("HOLD_position")) %>%
   row_spec(0, bold = TRUE) %>%
   pack_rows(index = index_grupos, bold = TRUE,
-            latex_align = "l", hline_before = TRUE, hline_after = TRUE,
+            latex_align = "l", hline_after = TRUE,
             label_row_css = "text-align: left; 
             border-bottom: 1px solid; border-top: 1px solid")
 ```
 
 
 
-```{r limpieza_dataset}
-# Los datos NA's se imputan y se suplantan por la mediana según tipo y cantidad de habitaciones 
+```{r limpieza-dataset}
+# Los datos NA's se imputan y se suplantan por la mediana según tipo y cantidad de ambientes
 
 # La justificación es que se encuentran correalcionadas fuertemente y los análsis, regresiones y demás
 
@@ -212,7 +201,7 @@ datos_sin_na <- drop_na(data = datos)
 
 
 datos <- datos %>%
-  group_by(property_type, rooms) %>% # Razonable usar que las habitaciones
+  group_by(property_type, rooms) %>% # Razonable usar que los ambientes
                                       # y el tipo dan los baños
   mutate(bathrooms = ifelse(is.na(bathrooms),
                             median(bathrooms, na.rm = TRUE), bathrooms)) %>%
@@ -239,7 +228,7 @@ n_obs_final <- nrow(df)
 
 
 
-```{r mod_df}
+```{r mod-df}
 lim_st <- as.numeric(quantile(df$surface_total,   0.99))
 lim_sc <- as.numeric(quantile(df$surface_covered, 0.99)) 
 
@@ -248,39 +237,54 @@ df_mod <- df %>%
 
 ```
 
-```{r surface_dist, fig.cap = "Distribución de la superficie cubierta de las propiedades (escala logarítmica).", fig.subcap = c("Conjunto completo, con colas largas.", "Tras recortar el percentil 99 superior."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
+En la fase inicial de preprocesamiento, se realizó una limpieza orientada al tratamiento de valores faltantes, observaciones atípicas, corrección de inconsistencias estructurales y el recorte de valores extremos, aplicando técnicas de limpieza y transformación bajo el marco de *tidy data* para asegurar la consistencia del análisis (*[@wickham2023]*). En particular, los valores faltantes de "Baños" se imputaron mediante la mediana condicionada por tipo de propiedad y cantidad de ambientes, aprovechando la fuerte relación entre estas variables. Asimismo, se eliminaron observaciones con superficies cubiertas mayores a las totales o con cantidades de dormitorios superiores al número de ambientes. Para reducir la influencia de valores atípicos, se recortaron las colas superiores del 1% en las variables de superficie (vease *Figura \@ref(fig:surface-dist)*) y se filtraron precios mayores a 999,999 USD. Sobre la base depurada se construyó la variable "Precio por m^2^", utilizada en los análisis posteriores.
+
+```{r surface-dist, fig.cap = "Distribución de la superficie cubierta de las propiedades (escala logarítmica).", fig.subcap = c("Conjunto completo, con colas largas.", "Tras recortar el percentil 99 superior."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
 ggplot(df, aes(x = surface_covered)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.7) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Superficie cuebierta [m²]", y = "Cantidad de propiedades [u.a.]") +
-  tema
+  labs(x = bquote("Superficie cubierta "(m^2)), y = "Cantidad de propiedades") +
+  tema +
+  theme(axis.title = element_text(size = 11))
 
 # Se encuentran colas muy largas, se prefirió cortar por el 0.01 mayor perctil 
 ggplot(df_mod, aes(x = surface_covered)) +
   geom_histogram(bins = 40, fill = "#fc8d62", alpha = 0.7) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Superficie Cubierta [m²]", y = "Cantidad de propiedades [u.a]") +
-  tema
+  labs(x = bquote("Superficie cubierta "(m^2)), y = "Cantidad de propiedades") +
+  tema +
+  theme(axis.title = element_text(size = 11))
 ```
+
+
+Para la identificación de los factores con mayor influencia en el valor de las propiedades, se realizó un Análisis Exploratorio de Datos (EDA), el cual incluyó la elaboración de tablas descriptivas y gráficos de distribución, así como el análisis de correlación entre las variables estructurales de las propiedades. La matriz de correlación (*Figura \@ref(fig:matriz-correlacion)*) permitió identificar a "Baños", "Superficie cubierta", "Ambientes" y "Dormitorios" como las variables con mayor asociación lineal con el precio. Estas predictoras fueron evaluadas individualmente mediante modelos de regresión lineal simple, cuya capacidad de generalización se estimó mediante validación cruzada de 10 folds implementada con caret. Para cada modelo se registraron métricas de desempeño como el r^2^ y el MSE. Aunque la variable "Baños" presentó el menor error promedio, su naturaleza discreta generó un ajuste deficiente, por lo que se seleccionó "Superficie cubierta" como predictora final para la regresión lineal simple.
+
 
 <!-- Se muestran ambas para fines comparativos internos, de garantizar bunas practicas
      en la liempieza. Solo se "utilzia" la modificada-->
-```{r matriz_correlacion_modificado, include = FALSE}
-numeric_vars_modif <- df_mod %>% select(rooms, bedrooms, bathrooms,
-                             surface_total, surface_covered, price)
-M <- cor(numeric_vars_modif)
-corrplot(M, method = "color", type = "upper", addCoef.col = "black",
-         tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
 
-numeric_vars <- datos %>% select(rooms, bedrooms, bathrooms,
-                             surface_total, surface_covered, price)
-M <- cor(numeric_vars)
-corrplot(M, method = "color", type = "upper", addCoef.col = "black",
-         tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
-```
+```{r matriz-correlacion, fig.show="hold", out.width="50%", fig.cap="Matrices de correlación.", fig.subcap=c("Conjunto completo con datos crudos.", "Tras recortar el percentil 99 superior y realizar imputaciones."), fig.align="center"}
+ numeric_vars <- datos %>% select(rooms, bedrooms, bathrooms,
+                              surface_total, surface_covered, price)
+ M_cor <- cor(numeric_vars)
+ colnames(M_cor) <- c("Ambientes", "Dormitorios", "Baños", "Sup. Total", "Sup. Cubierta", "Precio")
+ rownames(M_cor) <- colnames(M_cor)
+ corrplot(M_cor, method = "color", type = "upper", addCoef.col = "black",
+          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+ 
+ 
+ numeric_vars_modif <- df_mod %>% select(rooms, bedrooms, bathrooms,
+                              surface_total, surface_covered, price)
+ M_cor_modif <- cor(numeric_vars_modif)
+ colnames(M_cor_modif) <- c("Ambientes", "Dormitorios", "Baños", "Sup. Total", "Sup. Cubierta", "Precio")
+ rownames(M_cor_modif) <- colnames(M_cor_modif)
+ corrplot(M_cor_modif, method = "color", type = "upper", addCoef.col = "black",
+          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+```     
 
 
-```{r box_plots, include = FALSE}
+
+```{r boxplots, fig.show='hide'}
 datos_numeric <- datos_sin_na %>% 
   select(rooms, bedrooms, bathrooms, surface_total, surface_covered, price)
 
@@ -293,26 +297,31 @@ for(col in colnames(datos_numeric)){
 }
 ```
 
+Para el desarrollo del modelo de Regresión Lineal Múltiple, se utilizó la función lm() para predecir el precio de las viviendas. La identificación del conjunto óptimo de variables predictoras se realizó mediante un algoritmo de selección forward, el cual incorpora variables de manera secuencial basándose en la mejora del ajuste estadístico (*[@james2021]*). Con el fin de mitigar el riesgo de sobreajuste y asegurar la capacidad de generalización del modelo, la selección no se limitó al error de entrenamiento, sino que se empleó una estrategia de Validación Cruzada (Cross-Validation) de 10 folds. Bajo este esquema, se seleccionó el modelo que minimizó el Error Cuadrático Medio (MSE) promedio de validación.
+
+En una segunda instancia, se abordó la segmentación de las viviendas en Capital Federal mediante un análisis de agrupamiento no supervisado utilizando el algoritmo K-means. Dado que este método es sensible a las escalas de medición, se procedió a la estandarización de las variables numéricas (superficie y ambientes) para garantizar que todas tuvieran el mismo peso relativo en el cálculo de las distancias euclidianas (*[@kassambra2017]*). El número óptimo de clústeres se determinó mediante el Método del Codo (Elbow Method), identificando el punto de inflexión donde la Suma de Cuadrados Intra-clúster (WSS) comienza a estabilizarse. Finalmente, la calidad y cohesión de los segmentos obtenidos se validó a través del coeficiente de Silhouette (Silueta), evaluando la relación entre la disimilitud interna de los grupos y su separación externa (*[@rousseeuw1987]*).
 
 # Resultados
 
 <!-- A partir de acá es EDA para el análisis directo de la varriable precio-->
 
-```{r price_dist, fig.cap = "Distribución del precio de venta de las propiedades.", fig.subcap = c("Escala lineal.", "Escala logarítmica."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
+```{r price-dist, fig.cap = "Distribución del precio de venta de las propiedades.", fig.subcap = c("Escala lineal.", "Escala logarítmica."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
 ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#66c2a5", alpha = 0.7) +
   scale_x_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Precio [USD]", y = "Cantidad de propiedades [u.a.]") +
-  tema
+  labs(x = "Precio [USD]", y = "Cantidad de propiedades") +
+  tema +
+  theme(axis.title = element_text(size = 11))
 
 ggplot(df_mod, aes(x = price)) +
   geom_histogram(bins = 50, fill = "#fc8d62", alpha = 0.7) +
   scale_x_log10(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Precio [USD, escala log]", y = "Cantidad de propiedades [u.a]") +
-  tema
+  labs(x = "Precio [USD]", y = "Cantidad de propiedades") +
+  tema +
+  theme(axis.title = element_text(size = 11))
 ```
 
-```{r analisis_barrios}
+```{r analisis-barrios, results='hide'}
 df_barrios <- df %>%
   filter(str_detect(Region, "Zona Norte|Zona Sur|Zona Oeste|Capital Federal")) %>%
   mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
@@ -321,21 +330,18 @@ df_barrios <- df %>%
             q1_price_m2     = quantile(price_m2, 0.25), 
             q3_price_m2     = quantile(price_m2, 0.75),
             std_price_m2    = sd(price_m2),.groups = 'drop')
-
+df_barrios
 ```
 
 
-```{r densidadesXregion, fig.cap = "Distribución del precio mediano por m² según región.", fig.height = 3.4, out.width = "80%"}
+```{r densidadesXregion, fig.cap = "Distribución del precio mediano por m$^{2}$ según región.", fig.height = 3.4, out.width = "80%"}
 ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
   geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE, show.legend = FALSE) +
   geom_jitter(width = 0.15, size = 2.5, alpha = 0.7, show.legend = FALSE) +
   scale_fill_brewer(palette = paleta) +
   scale_color_brewer(palette = paleta) +
   tema + 
-  labs(
-    x = NULL,
-    y = "Precio promedio por m² [USD/m²]"
-  ) +
+  labs(y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) + 
   theme(
     strip.text = element_text(face = "bold"),      
     axis.title.x = element_text(face = "bold"),  
@@ -344,7 +350,7 @@ ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
 
 ```
 
-```{r precioXbarrio, fig.cap = "Precio mediano por m² por barrio o localidad del Gran Buenos Aires, segmentado por zona. Las barras representan el rango intercuartílico.", fig.height = 5.5, out.width = "95%"}
+```{r precioXbarrio, fig.cap = "Precio mediano por $m^{2}$ por barrio o localidad del Gran Buenos Aires, segmentado por zona. Las barras representan el rango intercuartílico.", fig.height = 5.5, out.width = "95%"}
 df_barrios %>%
   group_by(Region) %>%
   filter(Region != "Capital Federal") %>% 
@@ -360,13 +366,14 @@ df_barrios %>%
   scale_fill_brewer(palette = paleta) +
   scale_color_brewer(palette = paleta) +
   labs(x = NULL, 
-       y = "Precio promedio por m² [USD/m²]") +
+       y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
   tema +
   theme(
     strip.text = element_text(face = "bold"),      
     axis.title.x = element_text(face = "bold"),   
     axis.text.y = element_text(face = "bold") 
   )
+
 ```
 
 
@@ -374,9 +381,10 @@ df_barrios %>%
 ggplot(df_mod, aes(x = property_type, y = price, fill = property_type)) +
   geom_boxplot(alpha = 0.7, outlier.alpha = 0.05) +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = NULL, y = "Precio (USD)") +
+  labs(x = NULL, y = "Precio [USD]") +
   tema + theme(legend.position = "none") +
-  scale_fill_brewer(palette = paleta)
+  scale_fill_brewer(palette = paleta) +
+  theme(axis.title = element_text(size = 11))
 
 df_mod %>% 
       mutate(Region = str_replace(Region, ".*G\\.B\\.A\\. ", "")) %>% 
@@ -384,20 +392,15 @@ df_mod %>%
   geom_boxplot(alpha = 0.7, outlier.alpha = 0.05) +
   coord_flip() +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = NULL, y = "Precio (USD)") +
+  labs(x = NULL, y = "Precio [USD]") +
   tema + theme(legend.position = "none") +
-  scale_fill_brewer(palette = paleta)
+  scale_fill_brewer(palette = paleta) +
+  theme(axis.title = element_text(size = 11))
 ```
 
-En la matriz de correlacion se observa como las variables que mas se correlacionan con el precio son bathrooms, surface_covered, rooms y bedrooms, asi que evaluaremos cada modelo con esas vars como predictoras de precio
-
-}
-Para cumplir con el objetivo de maximizar la capacidad predictiva del modelo (Consigna 2), no se seleccionó el predictor basándose únicamente en el ajuste del set de entrenamiento (R2), el cual puede ser sensible a puntos de alta palanca. En su lugar, se compararon los modelos candidatos mediante Validación Cruzada de 10 folds, seleccionando la variable que minimizó el Error Cuadrático Medio de validación, garantizando así una mejor generalización ante datos no observados.
-
-<!-- Cande: para no olvidarme, RMSE lo mencionan en "Practical Data Science with R" -->
 
 
-```{r rls_composicion}
+```{r rls-composicion}
 posibles_predictoras <- c("bathrooms", "surface_covered", "rooms", "bedrooms")
 
 # Preparamos una tabla para guardar los resultados finales
@@ -448,27 +451,36 @@ for (i in 1:length(posibles_predictoras)) {
   resumen_metricas$rmse_promedio[i] <- sqrt(mean(mse_por_fold))
 }
 
-# Ordenamos para encontrar la que tiene el menor error
-resumen_metricas <- resumen_metricas %>% arrange(rmse_promedio)
 
-kable(resumen_metricas, caption = "Modelos de RLS ordenados por capacidad explicativa", col.names = c("Predictora", "r2", "MSE", "RMSE"), digits = 2, align = "lrrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+resumen_metricas <- resumen_metricas %>% 
+  arrange(rmse_promedio) %>% # Ordenamos para encontrar la que tiene el menor error
+  mutate(variable = recode(variable, 
+                           "bathrooms" = "Baños",
+                           "surface_covered" = "Superficie cubierta",
+                           "rooms" = "Ambientes",
+                           "bedrooms" = "Dormitorios")) %>% 
+  rename(`Predictora` = variable,
+         `r$^2$` = r2_promedio,
+         `MSE` = mse_promedio,
+         `RMSE` = rmse_promedio)
+
+kable(resumen_metricas, caption = "Modelos de RLS ordenados por capacidad explicativa", digits = 2, align = "lrrr", format.args = list(big.mark = ","), escape = FALSE, booktabs = TRUE) %>% 
   kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
 
 ```
 
-```{r evaluacion_kfolds, include=FALSE}
+```{r evaluacion-kfolds, results='hide'}
 # Esto es para evaluar que efectivamente cualquiera sea la variable con menor RMSE cree un modelo fuerte/robusto y no simplemente sea un fold en especifico que disminuyó el promedio dramáticamente. 
 tabla_completa_cv <- bind_rows(resultados_detallados) 
+tabla_completa_cv
 ```
 
 Si bien la variable bathrooms es la que menos RMSE presenta, al ser discreta y no continua, no construye un buen modelo predictivo para price por si sola, esto incluso lo podemos visualizar en el siguiente scatter plot donde se observa que claramente no hay una relacion linear y el modelo no ajusta bien. Por lo que, elegiremos surface_covered como variable predictora
 
 
 
-<!-- No se muestra este ajuste. Solo menciona que fue tenido en cuenta -->
-
-```{r rls_bathrooms}
+```{r rls-bathrooms, results = "hide"}
 rls_bathrooms <- lm(price ~ bathrooms, df_mod)
 
 coefs <- summary(rls_bathrooms)$coefficients
@@ -488,7 +500,7 @@ df_mod%>%
 ```
 
 
-```{r rls_surface_fit}
+```{r rls-surface-fit}
 rls_surface <- lm(price ~ surface_covered, data = df_mod)
 coeficientes <- summary(rls_surface)$coefficients
 b0 <- coeficientes[1,1]
@@ -498,7 +510,7 @@ r2_sc <- summary(rls_surface)$adj.r.squared
 ```
 
 
-```{r rls_surface_plot, fig.cap = "Regresión lineal simple del precio sobre la superficie cubierta (muestra aleatoria de 15.000 propiedades).", fig.subcap = c("Recta ajustada sobre los datos.", "Residuos frente a la superficie cubierta."), fig.ncol = 2, out.width = "48%", fig.height = 3.3}
+```{r rls-surface-plot, fig.cap = "Regresión lineal simple del precio sobre la superficie cubierta (muestra aleatoria de 15.000 propiedades).", fig.subcap = c("Recta ajustada sobre los datos.", "Residuos frente a la superficie cubierta."), fig.ncol = 2, out.width = "48%", fig.height = 3.3}
 set.seed(200)
 muestra <- df_mod %>% slice_sample(n = 1000)
 
@@ -506,7 +518,8 @@ ggplot(muestra, aes(x = surface_covered, y = price)) +
   geom_point(color = "#66c2a5", size = 1.2, alpha = 0.4) +
   geom_abline(color = "#fc8d62", intercept = b0, slope = b1) +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Superficie cubierta [m²]", y = "Precio [USD]") +
+  labs(x = bquote("Superficie cubierta "(m^2)), 
+       y = "Precio [USD]") +
   tema
 
 muestra <- muestra %>% mutate(ajustado = predict(rls_surface, muestra), residuo = price - ajustado)
@@ -514,12 +527,13 @@ ggplot(muestra, aes(x = surface_covered, y = residuo)) +
   geom_point(color = "#8da0cb", size = 1.2, alpha = 0.4) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "#fc8d62") +
   scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  labs(x = "Superficie cubierta [m²]", y = "Residuo [USD]") +
+  labs(x = bquote("Superficie cubierta "(m^2)), 
+                  y = "Residuo [USD]") +
   tema
 ```
 
 
-```{r funciones_seleccion_forward}
+```{r funciones-seleccion-forward}
 calculo_MSE <- function(y_pred, y_real){
    res <- mean((y_pred - y_real)^2)
    return(res)
@@ -614,7 +628,7 @@ seleccion_forward <- function(nombre_respuesta, dataframe, folds){
 }
 ```
 
-```{r rlm_seleccion_variables}
+```{r rlm-seleccion-variables}
 set.seed(200)
 
 df_predictoras_rlm <- df_mod %>% 
@@ -634,25 +648,28 @@ rlm_metricas_predictoras <- data.frame(
   MSEtrain = (seleccion_predictoras_price$MSEtrain)/1e9
 )
 
-rlm_metricas_predictoras <- rlm_metricas_predictoras %>%
-  mutate(predictoras = case_when(
-    predictoras == "Bathrooms" ~ "Baños",
-    predictoras == "Barrio_localidad" ~ "Barrio/Localidad",
-    predictoras == "Surface_covered" ~ "Superficie cubierta",
-    predictoras == "Property_type" ~ "Tipo de propiedad",
-    predictoras == "Surface_total" ~ "Superficie total",
-    predictoras == "Rooms" ~ "Ambientes",
-    predictoras == "Bedrooms" ~ "Dormitorios",
-    predictoras == "Region" ~ "Región",
-    TRUE ~ predictoras
-  )) %>% 
+
+rlm_metricas_predictoras %>%
+  select(-n_vars) %>% 
+  mutate(predictoras = recode(predictoras,
+                              "Bathrooms" = "Baños",
+                              "Barrio_localidad" = "Barrio/Localidad",
+                              "Surface_covered" = "Superficie cubierta",
+                              "Property_type" = "Tipo de propiedad",
+                              "Surface_total" = "Superficie total",
+                              "Rooms" = "Ambientes",
+                              "Bedrooms" = "Dormitorios",
+                              "Region" = "Región")) %>% 
   mutate(predictoras = if_else(row_number() == 1, 
                                predictoras, 
-                               glue("+ {predictoras}")))
-
-rlm_metricas_predictoras %>% 
-  select(-n_vars) %>% 
-  kable(caption = "Comparación de modelos de RLM según variables predictoras utilizadas respectivamente.", col.names = c("Modelo", "Predictores (acumulados)", "MSE validación (×10⁹)", "MSE entrenamiento (×10⁹)"), digits  = c(0, 0, 2, 2), align = "llrr", table.envir = "table", position = "!h", format.args = list(big.mark = ",")) %>% 
+                               glue("+ {predictoras}"))) %>% 
+  rename(`Modelo`= modelo,
+         `Predictoras (acumuladas)` = predictoras,
+         `MSE validación (x10$^9$)` = MSEval,
+         `MSE entrenamiento (x10$^9$)` = MSEtrain) %>% 
+  
+  kable(caption = "Comparación de modelos de RLM según variables predictoras utilizadas respectivamente.", 
+        digits  = c(0, 0, 2, 2), align = "llrr", format.args = list(big.mark = ","), escape = FALSE, booktabs = TRUE) %>% 
   kable_styling(latex_options = c("HOLD_position")) %>% 
   row_spec(0, bold = TRUE)
 ```
@@ -662,20 +679,21 @@ Para determinar la cantidad óptima de variables en el modelo de regresión line
 La curva de MSE muestra una disminución pronunciada entre 1 y 3 variables, seguida de una mejora moderada al incorporar la cuarta. A partir de ese punto, el MSE se estabiliza y las diferencias entre modelos más complejos son marginales (del orden de 0.02 × 10⁹), lo cual resulta irrelevante dada la escala de la variable respuesta.
 Por criterios de parsimonia y estabilidad, seleccionamos el modelo con 4 variables, correspondiente al punto de inflexión (“codo”) de la curva. Este modelo logra un equilibrio adecuado entre capacidad predictiva y complejidad, evitando incorporar predictoras que no aportan mejoras significativas en la generalización.
 
-```{r rlm_codo, fig.cap = "Error cuadrático medio de validación cruzada según el número de variables incluidas en el modelo de RLM.", fig.height = 3.2, out.width = "75%"}
+```{r rlm-evaluacion, fig.cap = "Error cuadrático medio de validación cruzada según el número de variables incluidas en el modelo de RLM.", fig.height = 3.2, out.width = "75%"}
 ggplot(rlm_metricas_predictoras, aes(x = n_vars, y = MSEval)) +
   geom_line(linewidth = 1, color = "#00BFC4") +
   geom_point(size = 3, color = "#00BFC4", alpha=0.7) +
+  geom_vline(xintercept = 3, linetype = 2, color = "#fc8d62") +
   labs(x = "Número de variables en el modelo",
-       y = "MSE (×10⁹)") +
-  theme_minimal()
+       y = bquote("MSE "(x10^9))) +
+  tema
 ```
 
 
 
 
 
-```{r rlm_final}
+```{r rlm-final}
 predictoras_finales_rlm <- seleccion_predictoras_price$orden_predictoras[1:4]
 
 formula_final <- as.formula(
@@ -688,7 +706,7 @@ modelo_final <- lm(formula_final, data = df_predictoras_rlm)
 
 
 
-```{r rlm_pred, fig.cap = "Precios predichos por el modelo final de RLM frente a los precios reales observados.", fig.height = 3.4, out.width = "95%"}
+```{r rlm-plot, fig.cap = "Precios predichos por el modelo final de RLM frente a los precios reales observados.", fig.height = 3.4, out.width = "95%"}
 df_plot <- data.frame(
   real = (df_predictoras_rlm$price)/1e3,
   pred = (predict(modelo_final))/1e3
@@ -699,25 +717,23 @@ muestra <- df_plot %>% slice_sample(n = 2000)
 
 
 ggplot(muestra, aes(x = real, y = pred)) +
-  geom_point(alpha = 0.4, color = "#1B5E4F") +
+  geom_point(alpha = 0.4, color = "#66c2a5") +
   geom_abline(intercept = 0, slope=1,color = "#fc8d62", linewidth = 1) + 
-  labs(
-    x = "Precio real (×10³)",
-    y = "Precio predicho (×10³)"
-    ) +
+  labs(x = bquote("Precio real "(x10^3)),
+       y = bquote("Precio predicho "(x10^3))) +
   tema
 ```
 
 
 Para evitar problemas de memoria y acelerar el cálculo, se utilizó una muestra aleatoria de 5,000 observaciones, suficiente para capturar la estructura general del dataset y obtener una estimación estable del número óptimo de clústeres.
 
-```{r escalado_kmeans}
+```{r estandarizacion-kmeans, results = "hide"}
 
 caba <- df_mod %>%
   filter(Region == "Capital Federal")
 
 # Remuestreo menor para poder ejecutar proceso de clustering en un tiempo razonable
-set.seed(123)
+set.seed(10)
 # Escalado: primero seleccionamos las numéricas de interés, luego estandarizamos
 caba_scaled <- caba %>%
   select(surface_covered, rooms, bedrooms, bathrooms) %>%
@@ -738,17 +754,20 @@ caba %>%
             median_price_m2 = median(price_m2), .groups = "drop") %>% 
   filter(n >= 200) %>%
   arrange(desc(median_price_m2)) %>%
-  head(8) %>%
+  head(8) %>% 
+  rename(`Barrio` = barrio_localidad,
+         `Cantidad` = n,
+         `Mediana del precio [USD]` = median_price,
+         `Mediana del precio por m$^2$ [USD/m$^2$]` = median_price_m2) %>% 
   kable(booktabs = TRUE, digits = 0,
-        col.names = c("Barrio", "N", "Mediana del precio [USD]", "Mediana del precio por m² [USD/m²]"),
-        caption = "Barrios de CABA más valorizados por precio del m² cubierto (mín. 200 registros).",
-        align = "lrrr",  position = "!h", format.args = list(big.mark = ","), ) %>%
+        caption = "Barrios de CABA más valorizados por precio por m$^{2}$ cubierto (mín. 200 registros).",
+        align = "lrrr", format.args = list(big.mark = ","), escape = FALSE) %>%
   kable_styling(latex_options = c("HOLD_position")) %>%
   row_spec(0, bold = TRUE)
 
 ```
 
-```{r boxplots_atipicos}
+```{r boxplots-atipicos, fig.show='hide'}
 for(col in colnames(caba_scaled)){
  boxplot <- ggplot(caba_scaled, aes(y = .data[[col]])) +
     geom_boxplot() +
@@ -766,13 +785,12 @@ for(col in colnames(caba_scaled)){
 ```
 
 
-```{r elbow_kmeans, fig.cap = "Método del codo: suma de cuadrados intra-clúster (WSS) en función del número de clústeres k.", fig.height = 3.2, out.width = "95%"}
+```{r elbow-kmeans, fig.cap = "Método del codo: suma de cuadrados intra-clúster (WSS) en función del número de clústeres k.", fig.height = 3.2, out.width = "95%"}
+set.seed(10)
 # Elbow method para encontrar la cantidad de clusters optima
 elb <- fviz_nbclust(caba_scaled_sample, kmeans, method = "wss", k.max = 10) +
-  labs(
-    x = "Número de clústeres (k)",
-    y = "Suma de cuadrados intra-clúster (WSS)"
-  )
+  labs(x = "Número de clústers (k)",
+       y = "Suma de cuadrados intra-clúster (WSS)")
 
 # Modificación color, tamaño y opacidad de puntos y linea
 elb$layers[[1]]$aes_params$colour <- "#00BFC4" # Color de la línea
@@ -788,31 +806,31 @@ elb + geom_vline(xintercept = 4, linetype = 2, color = "#fc8d62") +
   
 ```
 
-El codo se observa en k = 3, donde la disminución de WSS deja de ser pronunciada. Por encima de ese valor, las mejoras marginales son pequeñas, indicando que 3 clústeres capturan adecuadamente la estructura del conjunto de datos.
+El codo se observa en k = 4, donde la disminución de WSS deja de ser pronunciada. Por encima de ese valor, las mejoras marginales son pequeñas, indicando que 4 clústeres capturan adecuadamente la estructura del conjunto de datos.
 
 
 
-```{r exe_kmeans}
-set.seed(123)
+```{r exe-kmeans}
+set.seed(10)
 kmeans_res <- kmeans(caba_scaled, 4, nstart = 50)  
-
+#Cande: comentarios
 ord <- order(tapply(caba$surface_covered, kmeans_res$cluster, mean))
 remap <- setNames(seq_along(ord), as.character(ord))
 caba$cluster <- factor(remap[as.character(kmeans_res$cluster)], levels = 1:4)
 
 perfil <- caba %>%
   group_by(cluster) %>%
-  summarise(N = n(),
-            sup_cubierta = mean(surface_covered),
-            ambientes = mean(rooms),
-            dormitorios = mean(bedrooms),
-            baños = mean(bathrooms),
-            precio_mediano = median(price), .groups = "drop")
+  summarise(n = n(),
+            mean_sup_cubierta = mean(surface_covered),
+            median_ambientes = median(rooms),
+            median_dormitorios = median(bedrooms),
+            median_baños = median(bathrooms),
+            mean_precio = mean(price), .groups = "drop")
 ```
 
 
 ```{r cluster-viz, fig.cap = "Segmentos de viviendas de CABA proyectados sobre las dos primeras componentes principales (muestra de 5.000 propiedades).", fig.height = 4, out.height = "8cm"}
-set.seed(123)
+set.seed(10)
 ip <- sample(nrow(caba_scaled))
 segmentos <- c("Básica", "Estándar", "Alta", "Elevada")
 fviz_cluster(list(data = caba_scaled[ip, ],
@@ -823,23 +841,30 @@ fviz_cluster(list(data = caba_scaled[ip, ],
   xlim(-4,10)+
   labs(title = NULL, color = "Categoría", fill = "Categoría", shape = "Categoría")
 
-elims <- caba_scaled
+elims <- caba_scaled #Cande: que es esto
 ```
 
 ```{r perfil}
 perfil %>%
-  mutate(Segmento = c("1 · Básica", "2 · Estándar", "3 · Alta", "4 · Elevada")) %>%
-  select(Segmento, N, sup_cubierta, ambientes, dormitorios, baños, precio_mediano) %>%
+  mutate(Segmento = c("1 · Básica", "2 · Estándar", "3 · Alta", "4 · Elevada"),
+         sup_cubierta = "Sup. cub. (m$^2$)") %>%
+  select(Segmento, n, mean_sup_cubierta, median_ambientes, median_dormitorios, median_baños, mean_precio) %>%
+  rename(`Categoría` = Segmento,
+         `Cantidad` = n,
+         `Sup. cubierta (m$^2$)` = mean_sup_cubierta,
+         `Ambientes` = median_ambientes,
+         `Dormitorios` = median_dormitorios,
+         `Baños` = median_baños,
+         `Precio [USD]` = mean_precio) %>% 
   kable(booktabs = TRUE, digits = c(0,0,2,1,1,1,0),
-        col.names = c("Categoría","N","Sup. cub. (m²)","Ambientes","Dormit.","Baños","Precio mediano [USD]"),
-        caption = "Estadísticas de los 3 segmentos categorizados de viviendas en CABA (k-means).",
-        align = "lrrrrrr", format.args = list(big.mark = ","), position = "!h") %>%
+        caption = "Estadísticas de los 4 segmentos categorizados de viviendas en CABA.",
+        align = "lrrrrrr", format.args = list(big.mark = ","), escape = FALSE) %>%
   kable_styling(latex_options = c("HOLD_position")) %>%
   row_spec(0, bold = TRUE)
 ```
 
-```{r kmeans_silhouette, fig.cap = "Gráfico de siluetas del agrupamiento \\textit{k}-means ($k = 4$) sobre una submuestra de 1.500 propiedades de CABA. Cada barra es el ancho de silueta $S_i$ de una propiedad, ordenadas dentro de cada segmento: valores cercanos a 1 indican una asignación nítida a su grupo, próximos a 0 una propiedad en la frontera entre segmentos, y negativos una posible mala asignación. La línea punteada marca el ancho de silueta promedio, medida global de la calidad del agrupamiento.", fig.height = 3.4, out.width = "95%"}
-set.seed(123)
+```{r kmeans-silhouette, fig.cap = "Gráfico de siluetas del agrupamiento \\textit{k}-means ($k = 4$) sobre una submuestra de 1.500 propiedades de CABA. Cada barra es el ancho de silueta $S_i$ de una propiedad, ordenadas dentro de cada segmento: valores cercanos a 1 indican una asignación nítida a su grupo, próximos a 0 una propiedad en la frontera entre segmentos, y negativos una posible mala asignación. La línea punteada marca el ancho de silueta promedio, medida global de la calidad del agrupamiento.", fig.height = 3.4, out.width = "95%"}
+set.seed(10)
 # La matriz de distancias completa (5.000² ≈ 25 M de celdas) excede la memoria,
 # así que la silueta se evalúa sobre una submuestra, reutilizando la asignación
 # de clústeres del modelo k-means definitivo para que coincida con los segmentos.
@@ -875,14 +900,18 @@ El ancho de silueta promedio es moderado y positivo, lo que confirma que los cua
 
 # Discusiones
 
+\newpage
+
 # Referencias
 
 \printbibliography[heading=none]
 \renewcommand{\printbibliography}[1][]{}
 
+\newpage
+
 # Anexos
 
-```{r tablita_na}
+```{r tablita-na}
 datos_raw %>%
   summarise(across(everything(), ~ mean(is.na(.)))) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "prop_na") %>%
@@ -900,7 +929,7 @@ datos_raw %>%
 
 
 
-```{r cluster_distancias, fig.cap = "Matriz de distancias en el espacio estandarizado (superficie cubierta, ambientes, dormitorios y baños). La diagonal (recuadrada) mide la cohesión intra-clúster como distancia media de las propiedades a su centroide; fuera de la diagonal, la separación inter-clúster entre centroides. Valores bajos en la diagonal y altos fuera de ella indican grupos compactos y bien separados.", fig.height = 3.4, out.height = "7.5cm"}
+```{r cluster-distancias, fig.cap = "Matriz de distancias en el espacio estandarizado (superficie cubierta, ambientes, dormitorios y baños). La diagonal (recuadrada) mide la cohesión intra-clúster como distancia media de las propiedades a su centroide; fuera de la diagonal, la separación inter-clúster entre centroides. Valores bajos en la diagonal y altos fuera de ella indican grupos compactos y bien separados.", fig.height = 3.4, out.height = "7.5cm"}
 seg_lab <- c("Básica", "Estándar", "Alta", "Elevada")
 
 # Centroides reordenados según el mismo remapeo por superficie cubierta
