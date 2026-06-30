@@ -54,7 +54,10 @@ header-includes:
 
 # Introducción
 
-El mercado inmobiliario es un sector dinámico cuya comprensión resulta fundamental para diversos actores económicos y sociales. En este contexto, el presente informe analiza un conjunto de datos que reúne información sobre precios de viviendas en la Ciudad Autónoma de Buenos Aires (CABA) y el Gran Buenos Aires correspondiente al año 2020. Los datos analizados provienen de la plataforma Kaggle, en particular a "Buenos Aires Real State on sale" *[@properati]* y han sido adaptados con fines didácticos para este estudio.
+El mercado inmobiliario es un sector dinámico cuya comprensión resulta fundamental para diversos actores económicos y sociales. En este contexto, el presente informe analiza un conjunto de datos que reúne información sobre precios de viviendas en la Ciudad Autónoma de Buenos Aires (CABA) y el Gran Buenos Aires correspondiente al año 2020.
+
+<!-- Santi: Arreglar esto -->
+
 La importancia de abordar este análisis radica en la necesidad de identificar qué factores, ya sean características edilicias (como superficie, cantidad de ambientes o baños) o localización geográfica, inciden de manera determinante en la valoración de una propiedad. Comprender estas relaciones es clave para interpretar el funcionamiento del mercado, detectar patrones de comportamiento y aportar evidencia que permita tomar decisiones informadas en contextos de compra, venta o planificación urbana.
 Además, el mercado inmobiliario presenta una marcada heterogeneidad, propiedades con configuraciones similares pueden exhibir precios muy distintos según su ubicación, distribución interna o condiciones edilicias. Esta variabilidad hace que el análisis estadístico y el modelado predictiva resulten herramientas especialmente valiosas para estudiar esta dinámica. En este trabajo se emplean métodos de regresión lineal simple y múltiple para evaluar la capacidad de distintas variables de explicar el precio de las viviendas, así como técnicas de agrupamiento para identificar conjuntos de propiedades con características estructurales comparables dentro de la región de Capital Federal.
 El problema central que busca resolver este trabajo es la identificación de patrones y relaciones entre las variables físicas de las viviendas y su valor de mercado, así como la agrupación de las propiedades en conjuntos con características homogéneas. En función de ello, el objetivo principal del informe es evaluar la capacidad predictiva de distintos modelos y caracterizar los grupos resultantes, aportando una visión integral del comportamiento del mercado inmobiliario en el área analizada.
@@ -100,9 +103,9 @@ datos_raw <- read.csv("datosTP2_2026.csv", na.strings = c("NA", ""), stringsAsFa
 datos <- datos_raw
 ```
 
-El presente estudio utilizó como insumo principal una base de datos relativa al mercado inmobiliario de la Ciudad Autónoma de Buenos Aires y el Gran Buenos Aires, proveniente de la plataforma Kaggle[@properati]. El flujo de trabajo se estructuró en tres etapas principales, preprocesamiento del dataset, modelado predictivo mediante regresión lineal y agrupamiento no supervisado (este último aplicado únicamente a viviendas de Capital Federal) y comunicación, siguiendo el ciclo de vida de un proyecto de ciencia de datos robusto *[@zumel2020]*. Todas las tareas se realizaron en R *[@R-base]*, desde la depuración de los datos hasta el modelado y la comunicación de resultados.
+El presente trabajo hace uso de la base de datos de inmuebles a lo largo del AMBA, brindada por la plataforma Kaggle en "Buenos Aires Real State on sale" *[@properati]*, adaptados didácticamente por el personal docente a cargo del curso. El flujo de trabajo se estructuró en cuatro etapas principales, preprocesamiento del dataset y limpieza del mismo, análisis explotario por sobre ellos *(EDA)*, modelado predictivo mediante regresión lineal y agrupamiento no supervisado *(clustering)* aplicado únicamente a viviendas de Capital Federal. Concluyendo con un trabajo comunicativo sobre los resultados hallados, siguiendo el ciclo de vida de un proyecto de ciencia de datos robusto *[@zumel2020]*. Todas las tareas se realizaron en R *[@R-base]*, desde la depuración de los datos hasta el modelado y la comunicación de resultados.
 
-En las *Tabla \@ref(tab:descripcion-numericas)* y *Tabla \@ref(tab:descripcion-categoricas)* se puede ver una descripción estadística de las variables del dataset original. 
+En las *Tabla \@ref(tab:descripcion-numericas)* y *Tabla \@ref(tab:descripcion-categoricas)* se puede ver una descripción estadística de las variables del registro original donde se introducen las variables en juego dentro de los análisis posteriores tanto para las numéricas como para las de carácter categórico, respectivamente.
 
 ```{r descripcion-numericas}
 tabla_numericas <- datos %>%
@@ -211,11 +214,11 @@ datos <- datos %>%
 
 
 
-n_error_sup <- sum(datos$surface_covered > datos$surface_total) 
+cant_error_sup <- sum(datos$surface_covered > datos$surface_total) 
 # No puede haber más superficie
 # cubierta que superficie total 
 
-n_error_rooms <- sum(datos$bedrooms > datos$rooms) # No pueden haber más habs. que ambs.
+cant_error_rooms <- sum(datos$bedrooms > datos$rooms) # No pueden haber más habs. que ambs.
 df <- datos %>% filter(surface_covered <= surface_total,
                              bedrooms <= rooms)
 
@@ -225,7 +228,6 @@ df <- df %>%
   mutate(price_m2  = price/surface_covered)
 
 
-n_obs_final <- nrow(df)
 ```
 
 
@@ -237,9 +239,14 @@ lim_sc <- as.numeric(quantile(df$surface_covered, 0.99))
 df_mod <- df %>%
   filter(price < 999999, surface_total <= lim_st, surface_covered <= lim_sc)
 
+cant_obs_final <- nrow(df_mod)
 ```
 
-En la fase inicial de preprocesamiento, se realizó una limpieza orientada al tratamiento de valores faltantes, observaciones atípicas, corrección de inconsistencias estructurales y el recorte de valores extremos, aplicando técnicas de limpieza y transformación bajo el marco de *tidy data* para asegurar la consistencia del análisis *[@wickham2023]*. En particular, los valores faltantes de "Baños" se imputaron mediante la mediana condicionada por tipo de propiedad y cantidad de ambientes, aprovechando la fuerte relación entre estas variables. Asimismo, se eliminaron observaciones con superficies cubiertas mayores a las totales o con cantidades de dormitorios superiores al número de ambientes. Para reducir la influencia de valores atípicos, se recortaron las colas superiores del 1% en las variables de superficie (vease *Figura \@ref(fig:surface-dist)*) y se filtraron precios mayores a 999,999 USD. Sobre la base depurada se construyó la variable "Precio por m^2^", utilizada en los análisis posteriores.
+## Tratamiento de datos faltantes y atípicos
+
+En la fase inicial de preprocesamiento, se realizó una limpieza orientada al tratamiento de valores faltantes, observaciones atípicas, corrección de inconsistencias estructurales y el recorte de valores extremos, aplicando técnicas de limpieza y transformación bajo el marco de *tidy data* para asegurar la consistencia del análisis *[@wickham2023]*. Los valores faltantes se encontraban exclusivamente en la variable **baños** y fueron imputados considerando la poca cantidad de los mismos frente a la muestra total de `r format(cant_obs_tot, big.mark = ".")` (véase  *Figura \@ref(fig:tablita-na)*). En particular, se poseían `r format(cant_na_bath, big.mark = ".")` valores faltantes que fueron imputados utilizando la mediana para evitar posibles perturbaciones por valores fuera del rango intercuartil, como es comenta próximamente, y por ser una variable discreta (esperamos tener valores siempre enteros para esta variable). Dicha métrica fue calculada sobre una combinación de las variables **tipo de propiedad** y **ambientes** pues se encontró fuerte relación con ellas, puede observarse en *Figura \@ref(fig:matriz-correlacion)*.
+
+Asimismo, se eliminaron observaciones con superficies cubiertas mayores a las totales, pues resulta absurdo dicho caso, y con cantidades de dormitorios superiores al número de ambientes comprendiendo que los primeros se encuentran contenidos por la cantidad de ambientes (ambas son una cuestión de asegurar el análisis pues solo se eliminaron, por ello,`r format(cant_error_sup + cant_error_rooms, big.mark = ".")`). Para reducir la influencia de valores atípicos, se suprimió la cola superior al cuantil 0.99 en las variables de **superficie** y **superficie cubierta** (véase *Figura \@ref(fig:surface-dist)*) para garantizar mayor simetría en la distribución y se filtraron precios iguales a 999,999 USD pues, al ser el tope de las mediciones, no es posible distinguir si es un valor real de dichos inmuebles o un tope artificial de la base de datos o de la modificación pedagógica sobre la misma. En función a estos cambios se obtuvo un nuevo conjunto de datos de `r format(cant_obs_final, big.mark = ".")``
 
 ```{r surface-dist, fig.cap = "Distribución de la superficie cubierta de las propiedades (escala logarítmica).", fig.subcap = c("Conjunto completo, con colas largas.", "Tras recortar el percentil 99 superior."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
 ggplot(df, aes(x = surface_covered)) +
@@ -259,30 +266,9 @@ ggplot(df_mod, aes(x = surface_covered)) +
 ```
 
 
-Para la identificación de los factores con mayor influencia en el valor de las propiedades, se realizó un Análisis Exploratorio de Datos (EDA), el cual incluyó la elaboración de tablas descriptivas y gráficos de distribución, así como el análisis de correlación entre las variables estructurales de las propiedades. La matriz de correlación (*Figura \@ref(fig:matriz-correlacion)*) permitió identificar a "Baños", "Superficie cubierta", "Ambientes" y "Dormitorios" como las variables con mayor asociación lineal con el precio. Estas predictoras fueron evaluadas individualmente mediante modelos de regresión lineal simple, cuya capacidad de generalización se estimó mediante validación cruzada de 10 folds implementada con caret. Para cada modelo se registraron métricas de desempeño como el r^2^ y el MSE. Aunque la variable "Baños" presentó el menor error promedio, su naturaleza discreta generó un ajuste deficiente, por lo que se seleccionó "Superficie cubierta" como predictora final para la regresión lineal simple.
+## Modelado de datos
 
-<!-- Se muestran ambas para fines comparativos internos, de garantizar bunas practicas
-     en la liempieza. Solo se "utilzia" la modificada-->
-
-```{r matriz-correlacion, fig.show="hold", out.width="50%", fig.cap="Matrices de correlación.", fig.subcap=c("Conjunto completo con datos crudos.", "Tras recortar el percentil 99 superior y realizar imputaciones."), fig.align="center"}
- numeric_vars <- datos %>% select(rooms, bedrooms, bathrooms,
-                              surface_total, surface_covered, price)
- M_cor <- cor(numeric_vars)
- colnames(M_cor) <- c("Ambientes", "Dormitorios", "Baños", "Sup. Total", "Sup. Cubierta", "Precio")
- rownames(M_cor) <- colnames(M_cor)
- corrplot(M_cor, method = "color", type = "upper", addCoef.col = "black",
-          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
- 
- 
- numeric_vars_modif <- df_mod %>% select(rooms, bedrooms, bathrooms,
-                              surface_total, surface_covered, price)
- M_cor_modif <- cor(numeric_vars_modif)
- colnames(M_cor_modif) <- c("Ambientes", "Dormitorios", "Baños", "Sup. Total", "Sup. Cubierta", "Precio")
- rownames(M_cor_modif) <- colnames(M_cor_modif)
- corrplot(M_cor_modif, method = "color", type = "upper", addCoef.col = "black",
-          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
-```     
-
+Para la identificación de los factores con mayor influencia en el valor de las propiedades se recurrió al análisis exploratorio de datos, el cual incluyó la elaboración de tablas descriptivas y gráficos de distribución, así como el análisis de correlación entre las variables estructurales de las propiedades. La matriz de correlación *Figura \@ref(fig:matriz-correlacion)* (ya referenciada durante el proceso de imputación) permitió identificar a *baños*, "Superficie cubierta", "Ambientes" y "Dormitorios" como las variables con mayor asociación lineal con el precio. Estas predictoras fueron evaluadas individualmente mediante modelos de regresión lineal simple, cuya capacidad de generalización se estimó mediante validación cruzada por *k-fold* (*k-fold cross-validation*) con k = 10 particiones, implementada con *caret* *[@caret]*, registando para cada modelo métricas de desempeño como lo son R^2^ y error cuadrático medio (*MSE*).
 
 
 ```{r boxplots, fig.show='hide'}
@@ -298,9 +284,9 @@ for(col in colnames(datos_numeric)){
 }
 ```
 
-Para el desarrollo del modelo de Regresión Lineal Múltiple, se utilizó la función lm() para predecir el precio de las viviendas. La identificación del conjunto óptimo de variables predictoras se realizó mediante un algoritmo de selección forward, el cual incorpora variables de manera secuencial basándose en la mejora del ajuste estadístico *[@james2021]*. Con el fin de mitigar el riesgo de sobreajuste y asegurar la capacidad de generalización del modelo, la selección no se limitó al error de entrenamiento, sino que se empleó una estrategia de Validación Cruzada (Cross-Validation) de 10 folds. Bajo este esquema, se seleccionó el modelo que minimizó el Error Cuadrático Medio (MSE) promedio de validación.
+Se construyó, a su vez, una regresión lineal múltiple, a través de la función *lm()*, para predecir el precio de las viviendas. La identificación del conjunto óptimo de variables predictoras se realizó mediante un algoritmo de selección directa (*forward*), el cual incorpora variables de manera secuencial basándose en la mejora del ajuste estadístico *[@james2021]*. Con el fin de mitigar el riesgo de sobreajuste y asegurar la capacidad de generalización del modelo, la selección no se limitó al error de entrenamiento, sino que se empleó nuevamente validación cruzada con k = 10 folds. Bajo este esquema, se seleccionó el modelo que minimizó el MSE promedio de validación.
 
-En una segunda instancia, se abordó la segmentación de las viviendas en Capital Federal mediante un análisis de agrupamiento no supervisado utilizando el algoritmo K-means. Dado que este método es sensible a las escalas de medición, se procedió a la estandarización de las variables numéricas (superficie y ambientes) para garantizar que todas tuvieran el mismo peso relativo en el cálculo de las distancias euclidianas *[@kassambara2017]*. El número óptimo de clústeres se determinó mediante el Método del Codo (Elbow Method), identificando el punto de inflexión donde la Suma de Cuadrados Intra-clúster (WSS) comienza a estabilizarse. Finalmente, la calidad y cohesión de los segmentos obtenidos se validó a través del coeficiente de Silhouette (Silueta), evaluando la relación entre la disimilitud interna de los grupos y su separación externa *[@rousseeuw1987]*.
+En una tercera instancia, se abordó la segmentación de las viviendas en Capital Federal mediante un análisis de agrupamiento no supervisado utilizando el algoritmo *K-means*. Dado que este método es sensible a las escalas de medición, se procedió a la estandarización de las variables numéricas para garantizar que todas tuvieran el mismo peso relativo en el cálculo de las distancias euclidianas *[@kassambara2017]*. El número óptimo de *clusters* o categorías se determinó mediante el método del codo  o *Elbow Method* del íngles, se recomienda lectura *[@Hansen_2001]*, identificando el punto de inflexión donde la Suma de Cuadrados intra-cluster (*WSS*) comienza a estabilizarse y no resulta altamente superior una categorización mayor. En la práctica se recurrió a estimar para varios valores quedando con el más adecuado (esto se comenta al final del presente trabajo). Finalmente, la calidad y cohesión de los segmentos obtenidos se validó a través del coeficiente de silueta (*silhouette*), evaluando la relación entre la disimilitud interna de los grupos y su separación externa *[@rousseeuw1987]*.
 
 # Resultados
 
@@ -932,7 +918,34 @@ ggplot(sil_df, aes(x = id, y = sil_width, fill = cluster)) +
 El ancho de silueta promedio es moderado y positivo, lo que confirma que los cuatro segmentos están razonablemente cohesionados y separados. Los segmentos compactos y premium —los extremos de superficie— exhiben siluetas más altas, mientras que las pocas barras negativas corresponden a propiedades en la frontera entre los grupos intermedios.
 
 
-# Discusiones
+# Discusión
+
+Los resultados obtenidos permiten modelar y segmentar el mercado inmobiliario del AMBA con un equilibrio bastante adecuado entre precisión, interpretabilidad y simplicidad. El modelo de regresión lineal múltiple, seleccionado mediante un procedimiento de *forward selection*, demostró ser superior a los modelos de regresión simple ya que capturó de manera conjunta la influencia de la superficie y la cantidad de ambientes en el precio. La incorporación de validación cruzada de 10 folds fue un componente metodológico central pues permitió obtener una estimación insesgada del error de predicción y garantizó que el modelo final posea una buena capacidad de generalización ante datos no observados, evitando el sobreajuste que podría surgir al seleccionar modelos únicamente estimando sobre el subconjunto de entrenamiento. 
+
+La naturaleza restrictiva del modelo lineal también resultó ventajosa, ya que facilita la inferencia y permite interpretar directamente el peso relativo de cada predictor. Sobre ello, la mejor variable predictora encontrada fue la cantidad de baños, sin embargo, pertenece a un dominio discreto, hecho por el cual no resulta en la mejor elección para comprar multitud de propiedades que, en general, pueden poseer la misma cantidad de estos. Es así, que se prefirió, como es mostró anteriormente, la utilización de **superficie cubierta** como predictora donde, la diferencia entre los valores de R^2^ resulta marginal. 
+
+En relación a la variable de superficie total de las propiedades se intuye colinealidad con la superfice cubierta (por estar contenida esta última dentro de la total). Razón por la cual para el análisis de agrupamiento fue seleccionada únicamente una de ellas, para no sobreajustar por variables dependientes y minimizar inestabilidades numéricas, en particular, **superficie cubierta**, ya mencionado, por poseer mayor relación con el resto de variables como se observa en la matriz de correlación. Y, por razones equivalentes, se cree que se ve considerablemente afectado el rendimiento de la primera en la regresión múltiple, dado que, por operación del algoritmo de selección utilizado, la mayor influencia de esta variable se encuentra incorporada en el modelo.
+
+En cuanto a la caracterización, el algoritmo k‑means permitió identificar tres estructuras naturales de viviendas que se corresponden con segmentos diferenciados por escala y dimensiones. La estandarización previa de las variables fue un paso crítico para evitar que las diferencias en unidades de medida sesgaran el cálculo de distancias. La calidad de la segmentación fue respaldada por valores de Silhouette positivos y moderados, lo que indica que los grupos presentan cohesión interna y separación razonable. Sin embargo, la interpretación de los centroides requirió complementar la media con medidas robustas como la mediana para las variables discretas, dado que k‑means opera en un espacio continuo y puede producir valores no observables (por ejemplo, 1.8 ambientes). Aun así, los clusters lograron capturar segmentos relevantes del mercado: unidades pequeñas y económicas, propiedades de tamaño intermedio, unidades más amplias y aquellas con mayores comodidades y valores significativamente más altos en las variables de análisis.
+
+
+## Ventajas del enfoque aplicado
+
+El enfoque utilizado presenta varias fortalezas. La combinación de análisis descriptivo, regresión y clustering permitió abordar el problema desde perspectivas complementarias (explicación, predicción y segmentación), lo que favorece una comprensión más amplia del comportamiento del precio. La validación cruzada aportó rigor estadístico y evitó seleccionar modelos sobreajustados, mientras que la estandarización y el análisis de correlaciones facilitaron la interpretación en un conjunto de datos con escalas heterogéneas.
+Asimismo, tanto la regresión lineal múltiple como k‑means son métodos eficientes, reproducibles y ampliamente utilizados en análisis exploratorio de mercados inmobiliarios, lo que hace que los resultados obtenidos sean comparables con estudios similares y adecuados para una primera aproximación al comportamiento del mercado.
+
+
+
+## Limitaciones del análisis
+
+A pesar de sus aportes, el estudio presenta limitaciones que condicionan el alcance de las conclusiones. La regresión lineal asume relaciones estrictamente aditivas y simples entre predictores y precio, lo cual constituye solo una aproximación a la realidad del mercado y puede generar sesgos si existen patrones no lineales significativos. Además, el modelo enfrenta riesgo de sesgo por variables omitidas como pordrían ser antigüedad, estado edilicio, comodidas, cercanía a transporte o ubicación precisa podrían explicar mayor parte de la variabilidad del precio.
+
+
+[X]
+
+La distribución altamente asimétrica del precio y la presencia de posibles *outliers* afectan la estabilidad de las estimaciones, incluso después de la estandarización. En el caso del clustering, k‑means es sensible al ruido y a los valores extremos, y asume grupos esféricos con varianza similar, lo que implica que los clusters deben interpretarse como aproximaciones generales y no como segmentaciones estrictas del mercado. Similar efecto pueden tener estos valores sobre las rectas generadas por regresión si se considera que dichos datos generan alto apalancamiento (también conocido como *leverage*) sobre las mismas. Algunas posibles soluciones y acercamientos a estos errores sistemáticos para futuros trabajos, se basan en la búsqueda de algortimos con mayor robustes; por lo que sería útil recurrir a clusters como k-medoids (*PAM clustering*), la incorporación de pesos, o metodologías similares.
+
+
 
 \newpage
 
@@ -962,8 +975,30 @@ datos_raw %>%
   tema
 
 ```
-## Anexo II: Variación intra e inter clusters
 
+## Anexo II: Matriz de correlación
+
+```{r matriz-correlacion, fig.show="hold", out.width="50%", fig.cap="Matrices de correlación.", fig.subcap=c("Conjunto completo con datos crudos.", "Tras recortar el percentil 99 superior y realizar imputaciones."), fig.align="center"}
+ numeric_vars <- datos %>% select(rooms, bedrooms, bathrooms,
+                              surface_total, surface_covered, price)
+ M_cor <- cor(numeric_vars)
+ colnames(M_cor) <- c("Ambientes", "Dormitorios", "Baños", "Sup. Total", "Sup. Cubierta", "Precio")
+ rownames(M_cor) <- colnames(M_cor)
+ corrplot(M_cor, method = "color", type = "upper", addCoef.col = "black",
+          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+ 
+ 
+ numeric_vars_modif <- df_mod %>% select(rooms, bedrooms, bathrooms,
+                              surface_total, surface_covered, price)
+ M_cor_modif <- cor(numeric_vars_modif)
+ colnames(M_cor_modif) <- c("Ambientes", "Dormitorios", "Baños", "Sup. Total", "Sup. Cubierta", "Precio")
+ rownames(M_cor_modif) <- colnames(M_cor_modif)
+ corrplot(M_cor_modif, method = "color", type = "upper", addCoef.col = "black",
+          tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
+```   
+
+
+## Anexo IiI: Variación intra e inter clústers
 
 ```{r cluster-distancias, fig.cap = "Matriz de distancias en el espacio estandarizado (superficie cubierta, ambientes, dormitorios y baños). La diagonal (recuadrada) mide la cohesión intra-clúster como distancia media de las propiedades a su centroide; fuera de la diagonal, la separación inter-clúster entre centroides. Valores bajos en la diagonal y altos fuera de ella indican grupos compactos y bien separados.", fig.height = 3.4, out.height = "7.5cm"}
 seg_lab <- c("Básica", "Estándar", "Alta", "Elevada")
