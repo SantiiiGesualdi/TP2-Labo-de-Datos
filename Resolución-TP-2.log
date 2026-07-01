@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999998 (TeX Live 2026) (preloaded format=xelatex 2026.6.28)  30 JUN 2026 18:35
+This is XeTeX, Version 3.141592653-2.6-0.999998 (TeX Live 2026) (preloaded format=xelatex 2026.6.28)  30 JUN 2026 21:00
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1498,63 +1498,60 @@ LaTeX Info: Redefining \% on input line 1.
 LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/b/n' will be
 (Font)              scaled to size 10.95pt on input line 2.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
-(Font)              scaled to size 7.95422pt on input line 8.
+(Font)              scaled to size 7.95422pt on input line 4.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
-(Font)              scaled to size 5.6816pt on input line 8.
-LaTeX Font Info:    Trying to load font information for OML+lmm on input line 8.
+(Font)              scaled to size 5.6816pt on input line 4.
+LaTeX Font Info:    Trying to load font information for OML+lmm on input line 4.
 (c:/Users/Usuario/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/lm/omllmm.fd
 File: omllmm.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
-(Font)              scaled to size 11.36435pt on input line 8.
+(Font)              scaled to size 11.36435pt on input line 4.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
-(Font)              scaled to size 7.95505pt on input line 8.
+(Font)              scaled to size 7.95505pt on input line 4.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
-(Font)              scaled to size 5.68219pt on input line 8.
+(Font)              scaled to size 5.68219pt on input line 4.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
-(Font)              scaled to size 11.36201pt on input line 8.
+(Font)              scaled to size 11.36201pt on input line 4.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
-(Font)              scaled to size 7.9534pt on input line 8.
+(Font)              scaled to size 7.9534pt on input line 4.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
-(Font)              scaled to size 5.68102pt on input line 8.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 8.
+(Font)              scaled to size 5.68102pt on input line 4.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 4.
 (c:/Users/Usuario/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 8.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 4.
 (c:/Users/Usuario/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
-))
+)
+LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/m/n' will be
+(Font)              scaled to size 7.665pt on input line 15.
+)
 \tf@toc=\write4
 \openout4 = `Resolución-TP-2.toc'.
 
-[1]
+[1] [2]
 LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/m/it' will be
-(Font)              scaled to size 10.95pt on input line 135.
-[2]
-Overfull \hbox (11.27486pt too wide) in paragraph at lines 152--165
+(Font)              scaled to size 10.95pt on input line 145.
+LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/b/n' will be
+(Font)              scaled to size 14.0pt on input line 147.
+
+Overfull \hbox (11.27486pt too wide) in paragraph at lines 159--172
  [][] 
  []
 
 [3]
-LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/m/n' will be
-(Font)              scaled to size 7.665pt on input line 194.
+
+LaTeX Warning: Reference `fig:tablita-na' on page 4 undefined on input line 203.
+
+[4]
 File: Resolución-TP-2_files/figure-latex/surface-dist-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/surface-dist-1.pdf>
 LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/m/n' will be
-(Font)              scaled to size 9.0pt on input line 198.
+(Font)              scaled to size 9.0pt on input line 209.
 File: Resolución-TP-2_files/figure-latex/surface-dist-2.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/surface-dist-2.pdf>
-[4]
-File: Resolución-TP-2_files/figure-latex/matriz-correlacion-1.pdf Graphic file (type pdf)
-<use Resolución-TP-2_files/figure-latex/matriz-correlacion-1.pdf>
-File: Resolución-TP-2_files/figure-latex/matriz-correlacion-2.pdf Graphic file (type pdf)
-<use Resolución-TP-2_files/figure-latex/matriz-correlacion-2.pdf>
-
-Overfull \hbox (5.47499pt too wide) in paragraph at lines 209--210
- [][][][] 
- []
-
 [5]
 File: Resolución-TP-2_files/figure-latex/price-dist-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/price-dist-1.pdf>
@@ -1562,41 +1559,72 @@ File: Resolución-TP-2_files/figure-latex/price-dist-2.pdf Graphic file (type pd
 <use Resolución-TP-2_files/figure-latex/price-dist-2.pdf>
 File: Resolución-TP-2_files/figure-latex/densidadesXregion-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/densidadesXregion-1.pdf>
-File: Resolución-TP-2_files/figure-latex/precioXbarrio-1.pdf Graphic file (type pdf)
-<use Resolución-TP-2_files/figure-latex/precioXbarrio-1.pdf>
-File: Resolución-TP-2_files/figure-latex/precioXbarrio-2.pdf Graphic file (type pdf)
-<use Resolución-TP-2_files/figure-latex/precioXbarrio-2.pdf>
-[6] [7]
+[6]
 File: Resolución-TP-2_files/figure-latex/box-precio-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/box-precio-1.pdf>
 File: Resolución-TP-2_files/figure-latex/box-precio-2.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/box-precio-2.pdf>
-[8]
+[7]
 File: Resolución-TP-2_files/figure-latex/rls-surface-plot-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/rls-surface-plot-1.pdf>
 File: Resolución-TP-2_files/figure-latex/rls-surface-plot-2.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/rls-surface-plot-2.pdf>
-[9]
 File: Resolución-TP-2_files/figure-latex/rlm-evaluacion-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/rlm-evaluacion-1.pdf>
+[8]
 File: Resolución-TP-2_files/figure-latex/rlm-plot-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/rlm-plot-1.pdf>
-[10] [11]
+[9]
 File: Resolución-TP-2_files/figure-latex/elbow-kmeans-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/elbow-kmeans-1.pdf>
+[10]
 File: Resolución-TP-2_files/figure-latex/cluster-viz-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/cluster-viz-1.pdf>
-[12]
+[11]
 File: Resolución-TP-2_files/figure-latex/kmeans-silhouette-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/kmeans-silhouette-1.pdf>
-[13] [14] [15]
-LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/b/n' will be
-(Font)              scaled to size 14.0pt on input line 442.
+[12] [13] [14] [15]
 File: Resolución-TP-2_files/figure-latex/tablita-na-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/tablita-na-1.pdf>
+File: Resolución-TP-2_files/figure-latex/matriz-correlacion-1.pdf Graphic file (type pdf)
+<use Resolución-TP-2_files/figure-latex/matriz-correlacion-1.pdf>
+File: Resolución-TP-2_files/figure-latex/matriz-correlacion-2.pdf Graphic file (type pdf)
+<use Resolución-TP-2_files/figure-latex/matriz-correlacion-2.pdf>
+
+Overfull \hbox (5.47499pt too wide) in paragraph at lines 458--459
+ [][][][] 
+ []
+
+[16]
+LaTeX Font Info:    Calculating math sizes for size <14> on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
+(Font)              scaled to size 14.52829pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
+(Font)              scaled to size 10.16975pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
+(Font)              scaled to size 7.26414pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
+(Font)              scaled to size 14.52979pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
+(Font)              scaled to size 10.17079pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
+(Font)              scaled to size 7.2649pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
+(Font)              scaled to size 14.5268pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
+(Font)              scaled to size 10.1687pt on input line 465.
+LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
+(Font)              scaled to size 7.2634pt on input line 465.
+LaTeX Font Info:    Font shape `TU/TimesNewRoman(2)/b/n' will be
+(Font)              scaled to size 9.79996pt on input line 465.
+File: Resolución-TP-2_files/figure-latex/precioXbarrio-norte-1.pdf Graphic file (type pdf)
+<use Resolución-TP-2_files/figure-latex/precioXbarrio-norte-1.pdf>
+File: Resolución-TP-2_files/figure-latex/precioXbarrio-suroeste-1.pdf Graphic file (type pdf)
+<use Resolución-TP-2_files/figure-latex/precioXbarrio-suroeste-1.pdf>
+[17]
 File: Resolución-TP-2_files/figure-latex/cluster-distancias-1.pdf Graphic file (type pdf)
 <use Resolución-TP-2_files/figure-latex/cluster-distancias-1.pdf>
-[16] [17] (./Resolución-TP-2.aux
+[18] [19] (./Resolución-TP-2.aux
 LaTeX Info: Redefining \sptext on input line 9.
 LaTeX Info: Redefining \. on input line 9.
 LaTeX Info: Redefining \% on input line 9.
@@ -1605,17 +1633,20 @@ LaTeX Info: Redefining \% on input line 9.
 LaTeX2e <2026-06-01>
 L3 programming layer <2026-06-18>
  ***********
+
+LaTeX Warning: There were undefined references.
+
 Package logreq Info: Writing requests to 'Resolución-TP-2.run.xml'.
 \openout1 = `Resolución-TP-2.run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 28661 strings out of 469823
- 554954 string characters out of 5466956
- 1632070 words of memory out of 5000000
- 57263 multiletter control sequences out of 15000+600000
- 631448 words of font info for 96 fonts, out of 8000000 for 9000
+ 28721 strings out of 469823
+ 556919 string characters out of 5466956
+ 1631779 words of memory out of 5000000
+ 57311 multiletter control sequences out of 15000+600000
+ 634352 words of font info for 115 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 90i,10n,122p,1135b,5653s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 90i,10n,122p,1251b,5653s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
-Output written on Resolución-TP-2.pdf (18 pages).
+Output written on Resolución-TP-2.pdf (20 pages).

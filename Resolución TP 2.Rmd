@@ -105,7 +105,13 @@ datos <- datos_raw
 
 El presente trabajo hace uso de la base de datos de inmuebles a lo largo del AMBA, brindada por la plataforma Kaggle en "Buenos Aires Real State on sale" *[@properati]*, adaptados didácticamente por el personal docente a cargo del curso. El flujo de trabajo se estructuró en cuatro etapas principales, preprocesamiento del dataset y limpieza del mismo, análisis explotario por sobre ellos *(EDA)*, modelado predictivo mediante regresión lineal y agrupamiento no supervisado *(clustering)* aplicado únicamente a viviendas de Capital Federal. Concluyendo con un trabajo comunicativo sobre los resultados hallados, siguiendo el ciclo de vida de un proyecto de ciencia de datos robusto *[@zumel2020]*. Todas las tareas se realizaron en R *[@R-base]*, desde la depuración de los datos hasta el modelado y la comunicación de resultados.
 
-En las *Tabla \@ref(tab:descripcion-numericas)* y *Tabla \@ref(tab:descripcion-categoricas)* se puede ver una descripción estadística de las variables del registro original donde se introducen las variables en juego dentro de los análisis posteriores tanto para las numéricas como para las de carácter categórico, respectivamente.
+## Descripción de la base de datos
+
+La base de datos incluye variables numéricas y categóricas. Las variables numéricas se presentan en *Tabla \@ref(tab:descripcion-numericas)* y comprenden tanto medidas continuas (precio, superficie total y superficie cubierta) como variables discretas asociadas a conteos estructurales, como ambientes, dormitorios y baños. Sus estadísticos descriptivos permiten evaluar la variabilidad del conjunto y la presencia de valores extremos.
+
+Las variables categóricas (país, región, barrio/localidad y tipo de propiedad) se resumen en *Tabla \@ref(tab:descripcion-categoricas)* mediante frecuencias absolutas y relativas, lo que facilita identificar la composición del conjunto de datos y la predominancia de ciertas zonas y tipologías, como Capital Federal y el tipo “Departamento”.
+
+Esta caracterización inicial proporciona una visión estructural del conjunto de datos y orienta las decisiones metodológicas posteriores.
 
 ```{r descripcion-numericas}
 tabla_numericas <- datos %>%
@@ -290,7 +296,6 @@ En una tercera instancia, se abordó la segmentación de las viviendas en Capita
 
 # Resultados
 
-<!-- A partir de acá es EDA para el análisis directo de la varriable precio-->
 
 ```{r price-dist, fig.cap = "Distribución del precio de venta de las propiedades.", fig.subcap = c("Escala lineal.", "Escala logarítmica."), fig.ncol = 2, out.width = "48%", fig.height = 3.2}
 ggplot(df_mod, aes(x = price)) +
@@ -321,75 +326,18 @@ df_barrios
 ```
 
 
-```{r densidadesXregion, fig.cap = "Distribución del precio mediano por m$^{2}$ según región.", fig.height = 3.4, out.width = "80%"}
+```{r densidadesXregion, fig.cap = "Distribución de la mediana de precio por m$^{2}$ según región.", fig.height = 3.4, out.width = "80%"}
 ggplot(df_barrios, aes(x = Region, y = median_price_m2, color = Region)) +
   geom_violin(aes(fill = Region), alpha = 0.4, color = NA, trim = FALSE, show.legend = FALSE) +
   geom_jitter(width = 0.15, size = 2.5, alpha = 0.7, show.legend = FALSE) +
   scale_fill_brewer(palette = paleta) +
   scale_color_brewer(palette = paleta) +
   tema + 
-  labs(y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) + 
+  labs(y = bquote("Mediana de precio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) + 
   theme(
     strip.text = element_text(face = "bold"),      
     axis.title.x = element_text(face = "bold"),  
     axis.text.x = element_text(face = "bold"),
-  )
-
-```
-
-```{r precioXbarrio, fig.cap = "Precio mediano por $m^{2}$ por barrio o localidad del Gran Buenos Aires, segmentado por zona. Las barras representan el rango intercuartílico.", fig.height = 5.5, out.width = "95%"}
-
-paleta_completa <- paletteer_d("RColorBrewer::Set2")
-
-df_barrios %>%
-  group_by(Region) %>%
-  filter(str_detect(Region, "Zona Norte|Capital Federal")) %>% 
-  slice_head(n = 10) %>% 
-  ungroup()  %>% 
-  ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
-                         y = median_price_m2, fill = Region, color = Region)) + # Añadido color aquí para las errorbars
-  geom_col(alpha = 0.7, show.legend = FALSE) +
-  coord_flip()+
-  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
-                    ymax = median_price_m2 + q3_price_m2), width = 0.3,
-                show.legend = FALSE, color="black")   +
-  facet_wrap(~Region, scales = "free_y")+
-  scale_fill_manual(values = paleta_completa[1:2]) +
-  scale_color_manual(values = paleta_completa[1:2]) +
-  labs(x = NULL, 
-       y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
-  tema +
-  theme(
-    strip.text = element_text(face = "bold"),      
-    axis.title.x = element_text(face = "bold"),   
-    axis.text.y = element_text(face = "bold") 
-  )
-
-
-df_barrios %>%
-  group_by(Region) %>%
-  filter(str_detect(Region, "Zona Sur|Zona Oeste")) %>% 
-  slice_head(n = 10) %>% 
-  ungroup()  %>% 
-  ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
-                         y = median_price_m2, fill = Region, color = Region)) + # Añadido color aquí para las errorbars
-  geom_col(alpha = 0.7, show.legend = FALSE) +
-  coord_flip()+
-  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
-  geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
-                    ymax = median_price_m2 + q3_price_m2), width = 0.3,
-                show.legend = FALSE, color="black")   +
-  facet_wrap(~Region, scales = "free_y")+
-  scale_fill_manual(values = paleta_completa[3:4]) +
-  scale_color_manual(values = paleta_completa[3:4]) +
-  labs(x = NULL, 
-       y = bquote("Precio promedio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
-  tema +
-  theme(
-    strip.text = element_text(face = "bold"),      
-    axis.title.x = element_text(face = "bold"),   
-    axis.text.y = element_text(face = "bold") 
   )
 
 ```
@@ -833,7 +781,7 @@ El codo se observa en k = 4, donde la disminución de WSS deja de ser pronunciad
 ```{r exe-kmeans}
 set.seed(10)
 kmeans_res <- kmeans(caba_scaled, 4, nstart = 50)  
-#Cande: comentarios
+
 ord <- order(tapply(caba$surface_covered, kmeans_res$cluster, mean))
 remap <- setNames(seq_along(ord), as.character(ord))
 caba$cluster <- factor(remap[as.character(kmeans_res$cluster)], levels = 1:4)
@@ -861,7 +809,7 @@ fviz_cluster(list(data = caba_scaled[ip, ],
   xlim(-4,10)+
   labs(title = NULL, color = "Categoría", fill = "Categoría", shape = "Categoría")
 
-elims <- caba_scaled #Cande: que es esto
+elims <- caba_scaled
 ```
 
 ```{r perfil}
@@ -997,8 +945,70 @@ datos_raw %>%
           tl.col = "black", tl.srt = 45, number.cex = 0.8, diag = FALSE)
 ```   
 
+## Anexo III: Distribución del precio por m^2^ en AMBA.
 
-## Anexo IiI: Variación intra e inter clústers
+```{r precioXbarrio-norte, fig.cap = "Mediana del precio por $m^{2}$ por barrio o localidad de Zona norte y Capital Federal. Las barras representan el rango intercuartílico.", fig.height = 5.5, out.width = "70%"}
+
+paleta_completa <- paletteer_d("RColorBrewer::Set2")
+
+df_barrios %>%
+  group_by(Region) %>%
+  filter(str_detect(Region, "Zona Norte|Capital Federal")) %>% 
+  slice_head(n = 10) %>% 
+  ungroup()  %>% 
+  ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
+                         y = median_price_m2, fill = Region, color = Region)) + # Añadido color aquí para las errorbars
+  geom_col(alpha = 0.7, show.legend = FALSE) +
+  coord_flip()+
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
+                    ymax = median_price_m2 + q3_price_m2), width = 0.3,
+                show.legend = FALSE, color="black")   +
+  facet_wrap(~Region, scales = "free_y")+
+  scale_fill_manual(values = paleta_completa[1:2]) +
+  scale_color_manual(values = paleta_completa[1:2]) +
+  labs(x = NULL, 
+       y = bquote("Mediana de precio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
+  tema +
+  theme(
+    strip.text = element_text(face = "bold"),      
+    axis.title.x = element_text(face = "bold"),   
+    axis.text.y = element_text(face = "bold") 
+  )
+
+```
+
+```{r precioXbarrio-suroeste, fig.cap = "Mediana del precio por $m^{2}$ por barrio o localidad de Zona norte y Capital Federal. Las barras representan el rango intercuartílico.", fig.height = 5.5, out.width = "70%"}
+df_barrios %>%
+  group_by(Region) %>%
+  filter(str_detect(Region, "Zona Sur|Zona Oeste")) %>% 
+  slice_head(n = 10) %>% 
+  ungroup()  %>% 
+  ggplot(aes(x = reorder(barrio_localidad, median_price_m2), 
+                         y = median_price_m2, fill = Region, color = Region)) + # Añadido color aquí para las errorbars
+  geom_col(alpha = 0.7, show.legend = FALSE) +
+  coord_flip()+
+  scale_y_continuous(labels = label_number(scale = 1e-3, suffix = "k")) +
+  geom_errorbar(aes(ymin = median_price_m2 - q1_price_m2, 
+                    ymax = median_price_m2 + q3_price_m2), width = 0.3,
+                show.legend = FALSE, color="black")   +
+  facet_wrap(~Region, scales = "free_y")+
+  scale_fill_manual(values = paleta_completa[3:4]) +
+  scale_color_manual(values = paleta_completa[3:4]) +
+  labs(x = NULL, 
+       y = bquote("Mediana de precio por " ~ m^2 ~ "[USD/" ~ m^2 ~ "]")) +
+  tema +
+  theme(
+    strip.text = element_text(face = "bold"),      
+    axis.title.x = element_text(face = "bold"),   
+    axis.text.y = element_text(face = "bold") 
+  )
+
+```
+
+
+
+## Anexo IV: Variación intra e inter clústers
 
 ```{r cluster-distancias, fig.cap = "Matriz de distancias en el espacio estandarizado (superficie cubierta, ambientes, dormitorios y baños). La diagonal (recuadrada) mide la cohesión intra-clúster como distancia media de las propiedades a su centroide; fuera de la diagonal, la separación inter-clúster entre centroides. Valores bajos en la diagonal y altos fuera de ella indican grupos compactos y bien separados.", fig.height = 3.4, out.height = "7.5cm"}
 seg_lab <- c("Básica", "Estándar", "Alta", "Elevada")
